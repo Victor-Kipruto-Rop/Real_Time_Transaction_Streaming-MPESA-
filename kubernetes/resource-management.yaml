@@ -1,0 +1,215 @@
+---
+# Resource Quota for namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mpesa-quota
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "50"
+    persistentvolumeclaims: "10"
+    services.loadbalancers: "2"
+    services.nodeports: "0"
+    pods.running: "40"
+    pods.pending: "10"
+
+---
+# Limit Range for pod resources
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mpesa-limits
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+spec:
+  limits:
+  - max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    type: Container
+  - max:
+      cpu: "4"
+      memory: "4Gi"
+    min:
+      cpu: "200m"
+      memory: "256Mi"
+    type: Pod
+
+---
+# NetworkPolicy for kube-system communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubelet-api
+  namespace: mpesa-pipeline
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 10250
+    - protocol: TCP
+      port: 10255
+
+---
+# Pod Security Policy (if using)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: mpesa-restricted
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'MustRunAs'
+    seLinuxOptions:
+      level: "s0:c123,c456"
+  readOnlyRootFilesystem: false
+
+---
+# ClusterRoleBinding for PSP
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mpesa-psp-users
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: use-mpesa-restricted-psp
+subjects:
+- kind: ServiceAccount
+  name: webhook-sa
+  namespace: mpesa-pipeline
+- kind: ServiceAccount
+  name: consumer-sa
+  namespace: mpesa-pipeline
+- kind: ServiceAccount
+  name: processor-sa
+  namespace: mpesa-pipeline
+
+---
+# MutatingWebhookConfiguration for sidecar injection (optional)
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: mpesa-sidecar-injector
+spec:
+  webhooks:
+  - name: sidecar-injector.mpesa-pipeline.svc
+    clientConfig:
+      service:
+        name: sidecar-injector
+        namespace: mpesa-pipeline
+        path: "/inject"
+      caBundle: LS0tLS1CRUdJTi... # base64 encoded CA cert
+    rules:
+    - operations: ["CREATE"]
+      apiGroups: [""]
+      apiVersions: ["v1"]
+      resources: ["pods"]
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    namespaceSelector:
+      matchLabels:
+        sidecar-injection: enabled
+
+---
+# ValidatingWebhookConfiguration for request validation
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: mpesa-validators
+spec:
+  webhooks:
+  - name: validate-secrets.mpesa-pipeline.svc
+    clientConfig:
+      service:
+        name: secret-validator
+        namespace: mpesa-pipeline
+        path: "/validate"
+      caBundle: LS0tLS1CRUdJTi... # base64 encoded CA cert
+    rules:
+    - operations: ["CREATE", "UPDATE"]
+      apiGroups: [""]
+      apiVersions: ["v1"]
+      resources: ["secrets"]
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+
+---
+# Priority Class for critical workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "Critical workload priority"
+
+---
+# Priority Class for webhook (high priority)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: webhook-priority
+value: 900
+globalDefault: false
+description: "Webhook service high priority"
+
+---
+# Pod Topology Spread Constraint
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-topology-config
+  namespace: mpesa-pipeline
+data:
+  topologySpreadConstraints: |
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway

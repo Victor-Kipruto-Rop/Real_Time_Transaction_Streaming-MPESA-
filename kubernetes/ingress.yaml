@@ -1,0 +1,186 @@
+---
+# Ingress for webhook HTTP/HTTPS access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mpesa-ingress
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: networking
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/auth-type: "basic"
+    nginx.ingress.kubernetes.io/auth-secret: "basic-auth"
+    nginx.ingress.kubernetes.io/auth-realm: "M-Pesa Webhook"
+spec:
+  tls:
+  - hosts:
+    - "webhook.example.com"
+    secretName: webhook-tls
+  rules:
+  - host: "webhook.example.com"
+    http:
+      paths:
+      - path: /webhook
+        pathType: Prefix
+        backend:
+          service:
+            name: webhook
+            port:
+              number: 8080
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: webhook
+            port:
+              number: 8080
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: webhook
+            port:
+              number: 8888
+
+---
+# NetworkPolicy for ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-allow
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: networking
+spec:
+  podSelector:
+    matchLabels:
+      app: webhook
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8443
+
+---
+# Certificate for TLS (with cert-manager)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: webhook-certificate
+  namespace: mpesa-pipeline
+spec:
+  secretName: webhook-tls
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  commonName: webhook.example.com
+  dnsNames:
+  - webhook.example.com
+  - "*.webhook.example.com"
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+# ClusterIssuer for Let's Encrypt (self-signed for dev)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Self-signed issuer for development
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: self-signed
+spec:
+  selfSigned: {}
+
+---
+# Alternative: Self-signed certificate for dev
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: webhook-self-signed
+  namespace: mpesa-pipeline
+spec:
+  secretName: webhook-tls-dev
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  commonName: webhook.mpesa-pipeline.svc.cluster.local
+  dnsNames:
+  - webhook.mpesa-pipeline.svc.cluster.local
+  - webhook.mpesa-pipeline
+  - webhook
+  issuerRef:
+    name: self-signed
+    kind: ClusterIssuer
+
+---
+# GCP Cloud Armor Security Policy (optional, for GKE)
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeSecurityPolicy
+metadata:
+  name: mpesa-security-policy
+  namespace: mpesa-pipeline
+spec:
+  description: "Security policy for M-Pesa webhook"
+  rules:
+  - action: "allow"
+    priority: "1000"
+    description: "Allow all traffic"
+    match:
+      versionedExpr: "GLv2"
+      expr:
+        expression: "true"
+  - action: "rate-based-ban"
+    priority: "100"
+    description: "Rate limit to 100 requests per minute"
+    match:
+      versionedExpr: "GLv2"
+      expr:
+        expression: "true"
+    rateLimitOptions:
+      conformAction: "allow"
+      exceedAction: "deny-429"
+      enforceOnKey: "IP"
+      banDurationSec: 600
+      rateLimitThreshold:
+        count: 100
+        intervalSec: 60
+  - action: "deny-403"
+    priority: "200"
+    description: "Deny requests from specific countries"
+    match:
+      versionedExpr: "GLv2"
+      expr:
+        expression: "origin.region_code == 'CN' || origin.region_code == 'RU'"

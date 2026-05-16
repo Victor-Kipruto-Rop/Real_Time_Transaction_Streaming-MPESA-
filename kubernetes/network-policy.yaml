@@ -1,0 +1,258 @@
+---
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mpesa-pipeline
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# Default deny all egress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: mpesa-pipeline
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+
+---
+# Allow ingress to webhook from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-webhook-ingress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: webhook
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8443
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8888  # Metrics port
+
+---
+# Allow ingress to consumer from internal pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-consumer-ingress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: consumer
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8888
+
+---
+# Allow ingress to processor from internal pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-processor-ingress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: processor
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8888
+
+---
+# Allow webhook egress to external APIs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-webhook-egress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: webhook
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow external APIs
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+  # Allow GCP APIs
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow Cloud SQL
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Allow consumer egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-consumer-egress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: consumer
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow pod-to-pod
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8888
+  # Allow GCP APIs
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow Cloud SQL
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Allow processor egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-processor-egress
+  namespace: mpesa-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: processor
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow pod-to-pod
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8888
+  # Allow GCP APIs
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow Cloud SQL
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Allow cross-namespace access for monitoring
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: mpesa-pipeline
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: prometheus
+    ports:
+    - protocol: TCP
+      port: 8888
+
+---
+# Deny egress to all external networks by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-external-egress
+  namespace: mpesa-pipeline
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress: []

@@ -1,0 +1,131 @@
+# Terraform Variables Example File
+# Copy this to terraform.tfvars and update with your actual values
+
+### REQUIRED: GCP Configuration
+gcp_project_id = "your-gcp-project-id"
+gcp_region     = "us-central1"
+gcp_zones      = ["us-central1-a", "us-central1-b", "us-central1-c"]
+
+### REQUIRED: Environment Configuration
+environment = "dev"  # dev, staging, or prod
+team_label  = "data-engineering"
+
+### REQUIRED: Database Configuration
+cloud_sql_root_password     = "ChangeMe!SecureRootPassword123"  # Change this!
+cloud_sql_app_user_password = "ChangeMe!SecureAppPassword456"   # Change this!
+
+### REQUIRED: Alert Email
+alert_email = "your-email@example.com"
+
+### Optional: Terraform Cloud Configuration
+terraform_cloud_org = ""  # Leave empty if not using Terraform Cloud
+# terraform_cloud_org = "your-organization"
+terraform_workspace = "mpesa-streaming"
+
+### Project Names
+project_name       = "mpesa-streaming"
+project_short_name = "mps"
+
+### BigQuery Configuration
+bigquery_datasets = {
+  raw       = "raw_mpesa"
+  staging   = "staging_mpesa"
+  analytics = "analytics_mpesa"
+  archive   = "archive_mpesa"
+}
+
+bigquery_dataset_location       = "US"
+bigquery_tables_expiration_ms   = 2592000000  # 30 days
+
+### Cloud SQL Configuration
+cloud_sql_instance_tier        = "db-f1-micro"  # db-f1-micro, db-g1-small, db-n1-standard-1, etc.
+cloud_sql_backup_location      = "us-central1"
+cloud_sql_database_version     = "POSTGRES_15"
+
+### Pub/Sub Configuration
+pubsub_topics = {
+  transactions     = "mpesa-transactions"
+  enriched         = "mpesa-enriched"
+  dead_letter      = "mpesa-dlq"
+}
+
+pubsub_subscription_retention_days = 7
+
+### Cloud Run Configuration
+cloud_run_webhook_memory              = "512Mi"   # 128Mi, 256Mi, 512Mi, 1Gi, 2Gi, 4Gi
+cloud_run_webhook_cpu                 = "1"       # 1, 2, 4, 6, 8
+cloud_run_webhook_timeout             = 60        # seconds
+cloud_run_webhook_concurrent_requests = 100
+cloud_run_min_instances               = 1
+cloud_run_max_instances               = 10
+
+### VPC Configuration
+enable_private_connectivity = true
+vpc_cidr_range              = "10.0.0.0/16"
+subnet_cidr_range           = "10.0.1.0/24"
+
+### Dataflow Configuration
+dataflow_zone              = "us-central1-a"
+dataflow_worker_num_threads = 2
+dataflow_autoscaling_algorithm = "THROUGHPUT_BASED"
+
+### Monitoring & Logging
+enable_monitoring = true
+enable_logging    = true
+log_retention_days = 30
+
+### Artifact Registry
+artifact_registry_repository_id   = "mpesa-docker"
+artifact_registry_repository_format = "DOCKER"
+
+### Cloud Build
+enable_cloud_build = true
+# cloud_build_github_owner = "your-github-org"
+# cloud_build_github_repo  = "your-repo"
+
+### Scaling Configuration
+scaling_config = {
+  enable_autoscaling = true
+  min_replicas      = 1
+  max_replicas      = 3
+}
+
+### Budget & Cost Control
+enable_budget_alerts           = true
+budget_monthly_limit_usd       = 500
+budget_alert_threshold_percentage = [50, 75, 100]
+
+### Additional Labels
+additional_labels = {
+  cost_center = "data-engineering"
+  owner       = "your-name"
+  business_unit = "analytics"
+}
+
+### Environment-Specific Overrides
+# For development environment, uncomment and customize:
+# environment = "dev"
+# cloud_run_max_instances = 3
+# enable_monitoring = true
+# scaling_config = {
+#   enable_autoscaling = false
+#   min_replicas      = 1
+#   max_replicas      = 1
+# }
+
+# For staging environment:
+# environment = "staging"
+# cloud_sql_instance_tier = "db-g1-small"
+# enable_monitoring = true
+
+# For production environment:
+# environment = "prod"
+# cloud_sql_instance_tier = "db-n1-standard-1"
+# cloud_run_max_instances = 10
+# enable_backup = true
+# enable_monitoring = true
+# scaling_config = {
+#   enable_autoscaling = true
+#   min_replicas      = 2
+#   max_replicas      = 20
+# }

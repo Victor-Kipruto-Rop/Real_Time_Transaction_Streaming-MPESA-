@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>M-Pesa Webhook Sender</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #0b1220;
+        --panel: #0f1a2e;
+        --muted: #93a4c7;
+        --text: #eaf0ff;
+        --border: rgba(255, 255, 255, 0.12);
+        --accent: #4f8cff;
+        --accent2: #18c29c;
+        --danger: #ff5c7a;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+          monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--sans);
+        background: radial-gradient(1200px 600px at 20% 0%, rgba(79, 140, 255, 0.22), transparent 50%),
+          radial-gradient(900px 500px at 90% 10%, rgba(24, 194, 156, 0.12), transparent 50%), var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 980px;
+        margin: 28px auto;
+        padding: 0 16px 36px;
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 14px;
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        backdrop-filter: blur(8px);
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin: 10px 0 6px;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        padding: 10px 12px;
+        outline: none;
+        font-family: var(--sans);
+        font-size: 13px;
+      }
+
+      textarea {
+        font-family: var(--mono);
+        min-height: 260px;
+        resize: vertical;
+        line-height: 1.45;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      @media (max-width: 700px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      button.primary {
+        border-color: rgba(79, 140, 255, 0.55);
+        background: linear-gradient(180deg, rgba(79, 140, 255, 0.38), rgba(79, 140, 255, 0.18));
+      }
+
+      button.secondary {
+        border-color: rgba(24, 194, 156, 0.55);
+        background: linear-gradient(180deg, rgba(24, 194, 156, 0.25), rgba(24, 194, 156, 0.12));
+      }
+
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      pre {
+        margin: 10px 0 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        overflow: auto;
+        min-height: 120px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.22);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .warn {
+        color: #ffd37a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>M-Pesa Webhook Sender</h1>
+          <div class="sub">Browser UI for posting JSON to the local webhook receiver.</div>
+        </div>
+        <div class="pill">
+          <span>Health:</span>
+          <a href="/health" target="_blank" rel="noreferrer">/health</a>
+        </div>
+      </header>
+
+      <div class="grid">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label for="endpoint">Endpoint</label>
+              <select id="endpoint">
+                <option value="/webhook/c2b/confirmation" selected>C2B Confirmation</option>
+                <option value="/webhook/c2b/validation">C2B Validation</option>
+                <option value="/webhook/b2c/result">B2C Result</option>
+              </select>
+            </div>
+            <div>
+              <label for="baseUrl">Base URL</label>
+              <input id="baseUrl" value="" placeholder="e.g. http://localhost:5000" />
+            </div>
+          </div>
+
+          <label for="payload">JSON payload</label>
+          <textarea id="payload" spellcheck="false"></textarea>
+
+          <div class="btns">
+            <button class="secondary" id="loadSample" type="button">Load sample</button>
+            <button class="primary" id="send" type="button">Send POST</button>
+            <button id="clear" type="button">Clear output</button>
+          </div>
+
+          <div class="status" id="status"></div>
+        </div>
+
+        <div class="card">
+          <div class="sub">
+            Tip: If you paste a webhook URL into the browser, it uses <span class="warn">GET</span>, but these
+            endpoints require <span class="warn">POST</span>. This page sends POST for you.
+          </div>
+
+          <label>Response</label>
+          <pre id="out">(no requests yet)</pre>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const endpointEl = document.getElementById("endpoint");
+      const baseUrlEl = document.getElementById("baseUrl");
+      const payloadEl = document.getElementById("payload");
+      const outEl = document.getElementById("out");
+      const statusEl = document.getElementById("status");
+      const params = new URLSearchParams(window.location.search);
+
+      function nowDarajaTime() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+          d.getFullYear() +
+          pad(d.getMonth() + 1) +
+          pad(d.getDate()) +
+          pad(d.getHours()) +
+          pad(d.getMinutes()) +
+          pad(d.getSeconds())
+        );
+      }
+
+      function samplePayload(endpoint) {
+        if (endpoint === "/webhook/c2b/validation") {
+          return {
+            TransactionType: "Pay Bills Online",
+            TransID: "LHG31SV2QV",
+            TransTime: nowDarajaTime(),
+            TransAmount: 500.0,
+            BusinessShortCode: "174379",
+            BillRefNumber: "INV001",
+            InvoiceNumber: "",
+            MSISDN: "254712345678",
+          };
+        }
+        if (endpoint === "/webhook/b2c/result") {
+          return {
+            ConversationID: "AG_20240514_1a1234567a89a1a1a1a1",
+            Result: { ResultCode: 0, ResultDesc: "Processed successfully" },
+          };
+        }
+        return {
+          TransactionType: "C2B Payment",
+          TransID: "TEST001",
+          TransTime: nowDarajaTime(),
+          TransAmount: 500.0,
+          BusinessShortCode: "174379",
+          BillRefNumber: "INV-0001",
+          InvoiceNumber: "",
+          MSISDN: "254712345678",
+        };
+      }
+
+      function resolveBaseUrl() {
+        const v = baseUrlEl.value.trim();
+        if (v) return v.replace(/\/+$/, "");
+        return window.location.origin;
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function appendOut(obj) {
+        const prev = outEl.textContent === "(no requests yet)" ? "" : outEl.textContent + "\n\n";
+        outEl.textContent = prev + obj;
+      }
+
+      document.getElementById("loadSample").addEventListener("click", () => {
+        const payload = samplePayload(endpointEl.value);
+        payloadEl.value = JSON.stringify(payload, null, 2);
+        setStatus("Sample payload loaded.");
+      });
+
+      document.getElementById("clear").addEventListener("click", () => {
+        outEl.textContent = "(no requests yet)";
+        setStatus("");
+      });
+
+      document.getElementById("send").addEventListener("click", async () => {
+        const baseUrl = resolveBaseUrl();
+        const url = baseUrl + endpointEl.value;
+
+        let body;
+        try {
+          body = JSON.parse(payloadEl.value || "{}");
+        } catch (e) {
+          setStatus("Invalid JSON: " + e.message);
+          return;
+        }
+
+        const token = params.get("token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["X-UI-Token"] = token;
+
+        setStatus("Sending POST to " + url + " ...");
+
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          });
+
+          const text = await res.text();
+          const record = [
+            new Date().toISOString(),
+            "POST " + endpointEl.value,
+            "HTTP " + res.status,
+            text,
+          ].join("\n");
+
+          appendOut(record);
+          setStatus("Done (HTTP " + res.status + ").");
+
+          const transId = body.TransID || body.TransactionID;
+          if (transId) {
+            setStatus("Verifying Postgres insert for " + transId + " ...");
+            const verifyUrl =
+              baseUrl +
+              "/ui/verify?transaction_id=" +
+              encodeURIComponent(transId) +
+              (token ? "&token=" + encodeURIComponent(token) : "");
+            const verifyRes = await fetch(verifyUrl, { headers: token ? { "X-UI-Token": token } : {} });
+            const verifyText = await verifyRes.text();
+            appendOut(["VERIFY", "HTTP " + verifyRes.status, verifyText].join("\n"));
+            setStatus("Done.");
+          }
+        } catch (e) {
+          setStatus("Request failed: " + e.message);
+        }
+      });
+
+      // Load a default sample on first render
+      const endpointParam = params.get("endpoint");
+      if (endpointParam) {
+        const opts = Array.from(endpointEl.options).map((o) => o.value);
+        if (opts.includes(endpointParam)) {
+          endpointEl.value = endpointParam;
+        }
+      }
+
+      payloadEl.value = JSON.stringify(samplePayload(endpointEl.value), null, 2);
+      baseUrlEl.value = window.location.origin;
+    </script>
+  </body>
+</html>

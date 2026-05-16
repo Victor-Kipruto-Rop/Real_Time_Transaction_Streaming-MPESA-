@@ -1,0 +1,270 @@
+name: CI/CD Pipeline - M-Pesa Streaming
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===================================================================
+  # Code Quality & Linting
+  # ===================================================================
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint & Format Check
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      
+      - name: Run Black (code formatting)
+        run: black --check ingestion/ streaming/ schemas/ tests/
+      
+      - name: Run Flake8 (linting)
+        run: flake8 ingestion/ streaming/ schemas/ tests/ --max-line-length=100 --count --statistics
+      
+      - name: Run isort (import sorting)
+        run: isort --check-only ingestion/ streaming/ schemas/ tests/
+
+  # ===================================================================
+  # Type Checking
+  # ===================================================================
+  type-check:
+    runs-on: ubuntu-latest
+    name: Type Checking (mypy)
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -r requirements.txt
+      
+      - name: Run mypy type checker
+        run: mypy ingestion/ streaming/ schemas/ --ignore-missing-imports --no-error-summary || true
+
+  # ===================================================================
+  # Unit Tests
+  # ===================================================================
+  test:
+    runs-on: ubuntu-latest
+    name: Unit Tests
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: mpesa_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -r requirements.txt
+      
+      - name: Create .env file for tests
+        run: |
+          cat > .env << EOF
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_DB=mpesa_test
+          POSTGRES_USER=test_user
+          POSTGRES_PASSWORD=test_password
+          KAFKA_BROKERS=localhost:9092
+          KAFKA_TOPIC_TRANSACTIONS=mpesa-transactions
+          LOG_LEVEL=INFO
+          EOF
+      
+      - name: Setup PostgreSQL test database
+        run: |
+          PGPASSWORD=test_password psql -h localhost -U test_user -d mpesa_test -c "CREATE EXTENSION IF NOT EXISTS json;"
+        env:
+          PGPASSWORD: test_password
+      
+      - name: Run pytest with coverage
+        run: |
+          pytest tests/ -v --cov=ingestion --cov=streaming --cov=schemas --cov-report=xml --cov-report=term-missing
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: mpesa_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          KAFKA_BROKERS: localhost:9092
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # ===================================================================
+  # Security Scanning
+  # ===================================================================
+  security:
+    runs-on: ubuntu-latest
+    name: Security Scanning
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      - name: Install bandit
+        run: pip install bandit[toml]
+      
+      - name: Run Bandit security check
+        run: bandit -r ingestion/ streaming/ schemas/ -f json -o bandit-report.json || true
+      
+      - name: Check for secrets (truffleHog)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  # ===================================================================
+  # Docker Build & Push
+  # ===================================================================
+  build:
+    needs: [lint, type-check, test]
+    runs-on: ubuntu-latest
+    name: Build Docker Image
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  # ===================================================================
+  # Deployment (Optional - for main branch)
+  # ===================================================================
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy to Staging
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to staging environment
+        run: |
+          echo "Deploying to staging..."
+          # Add your deployment commands here
+          # Example: kubectl apply -f k8s/
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+
+  # ===================================================================
+  # Notification
+  # ===================================================================
+  notify:
+    if: always()
+    needs: [lint, type-check, test]
+    runs-on: ubuntu-latest
+    name: Notify Slack
+    
+    steps:
+      - name: Slack notification
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "CI/CD Pipeline for M-Pesa Streaming",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Pipeline Status*: ${{ job.status }}\n*Branch*: ${{ github.ref }}\n*Commit*: ${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

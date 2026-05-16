@@ -1,0 +1,299 @@
+---
+# Storage Class for fast SSD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  labels:
+    app: mpesa-pipeline
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# Storage Class for standard HDD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-hdd
+  labels:
+    app: mpesa-pipeline
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-standard
+  replication-type: regional-pd
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# PersistentVolumeClaim for webhook logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: webhook-logs-pvc
+  namespace: mpesa-pipeline
+  labels:
+    app: webhook
+    component: logging
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: standard-hdd
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# PersistentVolumeClaim for consumer cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: consumer-cache-pvc
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# PersistentVolumeClaim for processor models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: processor-models-pvc
+  namespace: mpesa-pipeline
+  labels:
+    app: processor
+    component: models
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: standard-hdd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# PersistentVolumeClaim for database backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-backup-pvc
+  namespace: mpesa-pipeline
+  labels:
+    app: postgres
+    component: backups
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-hdd
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# PersistentVolumeClaim for Redis persistent data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: mpesa-pipeline
+  labels:
+    app: redis
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 30Gi
+
+---
+# Snapshot for backup (Google Cloud snapshots)
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: pd-snapshot-class
+  labels:
+    app: mpesa-pipeline
+driver: pd.csi.storage.gke.io
+deletionPolicy: Delete
+
+---
+# Volume Snapshot for webhook logs
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: webhook-logs-snapshot
+  namespace: mpesa-pipeline
+  labels:
+    app: webhook
+    component: logging
+spec:
+  volumeSnapshotClassName: pd-snapshot-class
+  source:
+    persistentVolumeClaimName: webhook-logs-pvc
+
+---
+# Volume Snapshot for processor models
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: processor-models-snapshot
+  namespace: mpesa-pipeline
+  labels:
+    app: processor
+    component: models
+spec:
+  volumeSnapshotClassName: pd-snapshot-class
+  source:
+    persistentVolumeClaimName: processor-models-pvc
+
+---
+# StatefulSet for PostgreSQL (optional, if not using Cloud SQL)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: mpesa-pipeline
+  labels:
+    app: postgres
+    component: database
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: CLOUD_SQL_DATABASE
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: init-scripts
+        configMap:
+          name: db-init-scripts
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+      labels:
+        app: postgres
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+# StatefulSet for Redis cache
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: mpesa-pipeline
+  labels:
+    app: redis
+    component: cache
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+          - redis-server
+          - "--appendonly"
+          - "yes"
+          - "--requirepass"
+          - "PLACEHOLDER_REDIS_PASSWORD"
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 30Gi

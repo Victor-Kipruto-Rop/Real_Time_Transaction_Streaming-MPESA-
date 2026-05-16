@@ -1,0 +1,168 @@
+---
+# ServiceAccount for webhook service
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook-sa
+  namespace: mpesa-pipeline
+  labels:
+    app: webhook
+    component: ingestion
+---
+# ServiceAccount for consumer service
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: consumer-sa
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    component: streaming
+---
+# ServiceAccount for processor service
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: processor-sa
+  namespace: mpesa-pipeline
+  labels:
+    app: processor
+    component: analytics
+---
+# Role for webhook pod (read secrets, write logs)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: webhook-role
+  namespace: mpesa-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["daraja-credentials", "webhook-signing-key", "db-credentials"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["mpesa-config"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+---
+# Role for consumer pod (read/write ConfigMaps, read secrets)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: consumer-role
+  namespace: mpesa-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["db-credentials", "pubsub-credentials"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["mpesa-config", "consumer-state"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+---
+# Role for processor pod
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: processor-role
+  namespace: mpesa-pipeline
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["db-credentials", "pubsub-credentials"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["mpesa-config"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+---
+# RoleBinding for webhook
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: webhook-rolebinding
+  namespace: mpesa-pipeline
+subjects:
+- kind: ServiceAccount
+  name: webhook-sa
+  namespace: mpesa-pipeline
+roleRef:
+  kind: Role
+  name: webhook-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for consumer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: consumer-rolebinding
+  namespace: mpesa-pipeline
+subjects:
+- kind: ServiceAccount
+  name: consumer-sa
+  namespace: mpesa-pipeline
+roleRef:
+  kind: Role
+  name: consumer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for processor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: processor-rolebinding
+  namespace: mpesa-pipeline
+subjects:
+- kind: ServiceAccount
+  name: processor-sa
+  namespace: mpesa-pipeline
+roleRef:
+  kind: Role
+  name: processor-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole for pod-to-pod DNS discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mpesa-pod-discovery
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+# ClusterRoleBinding for pod discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mpesa-pod-discovery-binding
+subjects:
+- kind: ServiceAccount
+  name: webhook-sa
+  namespace: mpesa-pipeline
+- kind: ServiceAccount
+  name: consumer-sa
+  namespace: mpesa-pipeline
+- kind: ServiceAccount
+  name: processor-sa
+  namespace: mpesa-pipeline
+roleRef:
+  kind: ClusterRole
+  name: mpesa-pod-discovery
+  apiGroup: rbac.authorization.k8s.io

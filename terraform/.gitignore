@@ -1,0 +1,111 @@
+# Terraform-specific gitignore rules
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# .tfvars files
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Ignore override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Include override files you do want tracked
+!example_override.tf
+
+# Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
+*tfplan*
+tfplan
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore plan files
+*.tfplan
+plan.json
+
+# Ignore lock files (or track them if using Terraform Cloud/Enterprise)
+# .terraform.lock.hcl
+
+# Ignore crash log files
+crash.log
+crash.*.log
+
+# Ignore cache files
+.terraform.d/
+
+# Ignore .DS_Store files (macOS)
+.DS_Store
+
+# Ignore IDE files
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.iml
+
+# Ignore OS-specific files
+Thumbs.db
+.project
+.pydevproject
+
+# Ignore temporary files
+*.tmp
+*.bak
+temp/
+tmp/
+
+# Ignore secret files
+secrets.env
+secrets.json
+*.pem
+*.key
+*.pub
+secrets/
+!secrets/.gitkeep
+
+# Ignore Terraform Cloud/Enterprise specific files
+.terraformignore
+
+# Ignore generated files
+deployment-outputs.json
+outputs.json
+
+# Ignore logs
+terraform.log
+*.log
+logs/
+
+# Ignore debug files
+debug.log
+debug/
+
+# Ignore environment-specific files
+.env.dev
+.env.staging
+.env.prod
+
+# Ignore MacOS
+*.DS_Store
+.DS_Store
+
+# Ignore Windows
+*.exe
+*.dll
+
+# Only include terraform files
+!*.tf
+!*.tfvars.example
+!README.md
+!validate.sh

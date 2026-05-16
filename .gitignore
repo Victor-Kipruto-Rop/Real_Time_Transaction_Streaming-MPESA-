@@ -1,0 +1,138 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Data files
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.pkl
+!seeds/*.csv
+
+# ML models
+models/trained_*.pkl
+models/best_*.h5
+
+# IDE & editor
+.vscode
+.idea
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.ipynb_checkpoints/
+htmlcov/
+dbt_packages/
+target/
+logs/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+venv/
+.venv/
+node_modules/
+.DS_Store
+*.log
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+kubernetes/secret.yaml

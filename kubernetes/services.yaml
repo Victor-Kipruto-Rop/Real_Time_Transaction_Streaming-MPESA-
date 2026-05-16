@@ -1,0 +1,209 @@
+---
+# Service for webhook receiver (ingestion service)
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: mpesa-pipeline
+  labels:
+    app: webhook
+    component: ingestion
+  annotations:
+    description: "M-Pesa webhook receiver service"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 8443
+    protocol: TCP
+  - name: metrics
+    port: 8888
+    targetPort: 8888
+    protocol: TCP
+  selector:
+    app: webhook
+  sessionAffinity: None
+
+---
+# Service for consumer (streaming service)
+apiVersion: v1
+kind: Service
+metadata:
+  name: consumer
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    component: streaming
+  annotations:
+    description: "M-Pesa consumer service for Pub/Sub"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 8888
+    targetPort: 8888
+    protocol: TCP
+  selector:
+    app: consumer
+  sessionAffinity: None
+
+---
+# Service for processor (analytics service)
+apiVersion: v1
+kind: Service
+metadata:
+  name: processor
+  namespace: mpesa-pipeline
+  labels:
+    app: processor
+    component: analytics
+  annotations:
+    description: "M-Pesa data processor and aggregator"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 8888
+    targetPort: 8888
+    protocol: TCP
+  selector:
+    app: processor
+  sessionAffinity: None
+
+---
+# Headless service for pod-to-pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: mpesa-pipeline
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: discovery
+  annotations:
+    description: "Headless service for pod discovery"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 8888
+    targetPort: 8888
+    protocol: TCP
+  selector:
+    app: mpesa-pipeline
+
+---
+# Service for PostgreSQL access (internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: mpesa-pipeline
+  labels:
+    app: postgres
+    component: database
+  annotations:
+    description: "PostgreSQL database service"
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgresql
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
+
+---
+# Service for Redis cache (internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: mpesa-pipeline
+  labels:
+    app: redis
+    component: cache
+  annotations:
+    description: "Redis cache service"
+spec:
+  type: ClusterIP
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  selector:
+    app: redis
+
+---
+# Endpoint for Pub/Sub (external service reference)
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: pubsub-api
+  namespace: mpesa-pipeline
+  labels:
+    app: pubsub
+    component: external
+subsets:
+- addresses:
+  - ip: "0.0.0.0"  # Updated via ExternalName Service
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+
+---
+# Service for external BigQuery API
+apiVersion: v1
+kind: Service
+metadata:
+  name: bigquery-api
+  namespace: mpesa-pipeline
+  labels:
+    app: bigquery
+    component: external
+spec:
+  type: ExternalName
+  externalName: bigquery.googleapis.com
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+
+---
+# Service for external Pub/Sub API
+apiVersion: v1
+kind: Service
+metadata:
+  name: pubsub-api
+  namespace: mpesa-pipeline
+  labels:
+    app: pubsub
+    component: external
+spec:
+  type: ExternalName
+  externalName: pubsub.googleapis.com
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP

@@ -1,0 +1,127 @@
+version: 2
+
+models:
+  - name: stg_mpesa_raw
+    description: "Raw M-Pesa events staged from `mpesa_transactions_raw`."
+    columns:
+      - name: transaction_id
+        description: "Unique transaction identifier from M-Pesa"
+        tests:
+          - unique
+          - not_null
+      - name: phone_number
+        description: "Customer phone number"
+        tests:
+          - not_null
+      - name: amount
+        description: "Transaction amount in KES"
+        tests:
+          - not_null
+      - name: account_reference
+        description: "Merchant or account reference"
+      - name: transaction_time
+        description: "Transaction timestamp (Daraja format: YYYYMMDDHHmmss)"
+        tests:
+          - not_null
+      - name: received_at
+        description: "When the webhook was received"
+        tests:
+          - not_null
+      - name: source
+        description: "Data source (daraja_webhook, etc.)"
+
+  - name: stg_c2b_transactions
+    description: "Customer-to-Business confirmation events (typed/enriched)."
+    columns:
+      - name: transaction_id
+        description: "Unique transaction identifier"
+        tests:
+          - unique
+          - not_null
+      - name: customer_phone_number
+        description: "Customer phone number"
+        tests:
+          - not_null
+      - name: transaction_amount
+        description: "Transaction amount in KES"
+        tests:
+          - not_null
+      - name: amount_category
+        description: "Categorized transaction amount (low/medium/high)"
+        tests:
+          - accepted_values:
+              values: ["low", "medium", "high"]
+      - name: transaction_date
+        description: "Transaction date"
+        tests:
+          - not_null
+
+  - name: mart_county_heatmap
+    description: "Aggregate by transaction_date and account_reference."
+    columns:
+      - name: transaction_date
+        description: "Transaction date"
+        tests:
+          - not_null
+      - name: account_reference
+        description: "Account reference"
+        tests: []
+      - name: transaction_count
+        description: "Number of transactions in this county for this hour"
+        tests:
+          - not_null
+      - name: total_amount
+        description: "Total amount"
+        tests:
+          - not_null
+
+  - name: mart_daily_transactions
+    description: "Daily transaction summary (per customer per day)."
+    columns:
+      - name: transaction_date
+        description: "Date of transactions"
+        tests: [not_null]
+      - name: customer_phone_number
+        description: "Customer phone number"
+        tests: [not_null]
+      - name: account_reference
+        description: "Account reference"
+        tests: []
+      - name: transaction_count
+        description: "Total transactions for the day"
+        tests:
+          - not_null
+      - name: total_transaction_value
+        description: "Total amount"
+        tests:
+          - not_null
+      - name: avg_transaction_amount
+        description: "Average transaction amount"
+        tests:
+          - not_null
+      - name: max_transaction_amount
+        description: "Largest transaction for the day"
+        tests:
+          - not_null
+      - name: min_transaction_amount
+        description: "Smallest transaction for the day"
+        tests:
+          - not_null
+
+  - name: mart_hourly_volumes
+    description: "Hourly transaction volumes with aggregations"
+    columns:
+      - name: hour_bucket
+        description: "Hour bucket (timestamp truncated to hour)"
+        tests: [unique, not_null]
+      - name: transaction_count
+        description: "Number of transactions this hour"
+        tests:
+          - not_null
+      - name: total_amount
+        description: "Total amount"
+        tests: [not_null]
+      - name: unique_customers
+        description: "Unique customers this hour"
+        tests:
+          - not_null

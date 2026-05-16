@@ -1,0 +1,173 @@
+---
+# Kustomization file for base K8s resources
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: mpesa-pipeline-base
+  namespace: mpesa-pipeline
+
+# Common labels applied to all resources
+commonLabels:
+  app: mpesa-pipeline
+  environment: ${ENVIRONMENT}
+  managed-by: kustomize
+  version: "1.0.0"
+
+# Common annotations applied to all resources
+commonAnnotations:
+  owner: "data-engineering-team"
+  managed-by: "kustomize"
+  last-updated: "2026-05-16"
+
+# Namespace for all resources
+namespace: mpesa-pipeline
+
+# Base images for all deployments
+images:
+- name: webhook
+  newName: us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/mpesa-docker/webhook
+  newTag: latest
+- name: consumer
+  newName: us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/mpesa-docker/consumer
+  newTag: latest
+- name: processor
+  newName: us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/mpesa-docker/processor
+  newTag: latest
+
+# Replica counts
+replicas:
+- name: webhook
+  count: 2
+- name: consumer
+  count: 2
+- name: processor
+  count: 2
+
+# Resource files to include
+resources:
+- namespace.yaml
+- rbac.yaml
+- configmap.yaml
+- secrets.yaml
+- services.yaml
+- webhook-deployment.yaml
+- consumer-deployment.yaml
+- processor-deployment.yaml
+- ingress.yaml
+- network-policy.yaml
+- persistent-volumes.yaml
+- monitoring.yaml
+- resource-management.yaml
+
+# ConfigMap generators
+configMapGenerator:
+- name: mpesa-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=${ENVIRONMENT}
+  - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+  - GCP_REGION=${GCP_REGION}
+  files:
+  - db-init-scripts=../scripts/schema.sql
+  - logging-config=../config/logging.yaml
+
+# Secret generators
+secretGenerator:
+- name: daraja-credentials
+  behavior: merge
+  literals:
+  - api-key=${DARAJA_API_KEY}
+  - api-secret=${DARAJA_API_SECRET}
+  options:
+    annotations:
+      kustomize.config.k8s.io/needs-hash: "true"
+    labels:
+      managed: "true"
+
+- name: db-credentials
+  behavior: merge
+  literals:
+  - username=mpesa_app
+  - password=${CLOUD_SQL_APP_PASSWORD}
+  - host=${CLOUD_SQL_HOST}
+  - port="5432"
+  - database=mpesa_${ENVIRONMENT}
+  options:
+    annotations:
+      kustomize.config.k8s.io/needs-hash: "true"
+
+# Patches for environment-specific configurations
+patchesStrategicMerge:
+- webhook-patch.yaml
+- consumer-patch.yaml
+- processor-patch.yaml
+
+# Vars for string replacement
+vars:
+- name: NAMESPACE
+  objref:
+    kind: Namespace
+    name: mpesa-pipeline
+    apiVersion: v1
+  fieldref:
+    fieldpath: metadata.name
+
+- name: WEBHOOK_SERVICE_IP
+  objref:
+    kind: Service
+    name: webhook
+    apiVersion: v1
+  fieldref:
+    fieldpath: spec.clusterIP
+
+# Namespace transformations
+namePrefix: mpesa-
+nameSuffix: -${ENVIRONMENT}
+
+# JSON patches
+patchesJson6902:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: webhook
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: ${WEBHOOK_REPLICAS:2}
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/cpu
+      value: ${WEBHOOK_CPU_REQUEST:200m}
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/cpu
+      value: ${WEBHOOK_CPU_LIMIT:500m}
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: consumer
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: ${CONSUMER_REPLICAS:2}
+
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: processor
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: ${PROCESSOR_REPLICAS:2}
+
+# Sort output
+sort: legacy
+
+# Build options
+buildMetadata:
+  originAnnotations: true
+  labels: true
+  annotations: true

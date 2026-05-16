@@ -1,0 +1,98 @@
+# Pre-commit hooks configuration for code quality
+# Install with: pre-commit install
+# Run manually with: pre-commit run --all-files
+
+repos:
+  # ===================================================================
+  # Code Formatting
+  # ===================================================================
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+        language_version: python3.12
+        args: [--line-length=100]
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=100]
+
+  # ===================================================================
+  # Linting
+  # ===================================================================
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=100, --ignore=E203,W503]
+
+  # ===================================================================
+  # Type Checking
+  # ===================================================================
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: [--ignore-missing-imports, --no-error-summary]
+
+  # ===================================================================
+  # Security
+  # ===================================================================
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [--skip=B101,B601]
+
+  # ===================================================================
+  # JSON & YAML Validation
+  # ===================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-json
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # ===================================================================
+  # Git
+  # ===================================================================
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.12.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # ===================================================================
+  # Documentation
+  # ===================================================================
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+        args: [--ignore-words-list=daa]
+
+# ===================================================================
+# Configuration
+# ===================================================================
+default_language_version:
+  python: python3.12
+
+exclude: |
+  (?x)^(
+    migrations/|
+    venv/|
+    .venv/|
+    node_modules/|
+    .git/
+  )
+
+fail_fast: false

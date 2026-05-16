@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 100
+
+per-file-ignores =
+  tests/*.py: F401,F841,E501
+  streaming/flink_job.py: F401
+

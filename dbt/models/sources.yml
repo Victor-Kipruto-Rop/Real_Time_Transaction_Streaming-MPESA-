@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: mpesa
+    schema: public
+    tables:
+      - name: mpesa_transactions_raw
+

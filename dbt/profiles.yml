@@ -1,0 +1,13 @@
+mpesa_streaming:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('POSTGRES_USER', 'data_engineer') }}"
+      pass: "{{ env_var('POSTGRES_PASSWORD', '') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'mpesa_analytics') }}"
+      schema: public
+      threads: 4
+

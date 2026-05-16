@@ -1,0 +1,184 @@
+.PHONY: help setup install install-dev lint format type-check test test-cov test-integration \
+        docker-build docker-run docker-compose-up docker-compose-down \
+        db-setup db-seed db-clean \
+        run-webhook run-consumer run-consumer-docker check clean distclean
+
+.DEFAULT_GOAL := help
+
+# Colors
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+BLUE := \033[0;34m
+NC := \033[0m
+
+# Variables
+PYTHON := python3
+VENV_BIN := .venv/bin
+DOCKER_COMPOSE := docker compose
+
+help:
+	@echo "$(BLUE)M-Pesa Streaming - Project 01$(NC)"
+	@echo "======================================="
+	@echo ""
+	@echo "$(GREEN)Setup:$(NC)"
+	@echo "  make setup            Create venv"
+	@echo "  make install          Install production deps"
+	@echo "  make install-dev      Install dev deps"
+	@echo ""
+	@echo "$(GREEN)Code Quality:$(NC)"
+	@echo "  make lint             Flake8 linting"
+	@echo "  make format           Auto-format code"
+	@echo "  make format-check     Check formatting"
+	@echo "  make type-check       MyPy type checking"
+	@echo "  make security         Bandit security scan"
+	@echo "  make check            Run all checks"
+	@echo ""
+	@echo "$(GREEN)Testing:$(NC)"
+	@echo "  make test             Run unit tests"
+	@echo "  make test-cov         Tests + coverage"
+	@echo "  make test-integration Integration tests"
+	@echo ""
+	@echo "$(GREEN)Docker:$(NC)"
+	@echo "  make docker-build     Build image"
+	@echo "  make docker-run       Run container"
+	@echo ""
+	@echo "$(GREEN)Database:$(NC)"
+	@echo "  make db-setup         Initialize schema"
+	@echo "  make db-seed          Load sample data"
+	@echo ""
+	@echo "$(GREEN)Services:$(NC)"
+	@echo "  make docker-compose-up   Start services"
+	@echo "  make docker-compose-down Stop services"
+	@echo "  make run-webhook        Start webhook"
+	@echo "  make run-consumer       Start consumer"
+	@echo ""
+	@echo "$(GREEN)Maintenance:$(NC)"
+	@echo "  make clean            Remove temp files"
+	@echo "  make distclean        Full cleanup"
+	@echo ""
+
+setup:
+	@echo "$(BLUE)Creating venv...$(NC)"
+	$(PYTHON) -m venv .venv
+	$(VENV_BIN)/pip install --upgrade pip setuptools wheel
+	@echo "$(GREEN)✓ Venv created$(NC)"
+
+install:
+	@echo "$(BLUE)Installing deps...$(NC)"
+	$(VENV_BIN)/pip install -q -r requirements.txt
+	@echo "$(GREEN)✓ Production deps installed$(NC)"
+
+install-dev: install
+	@echo "$(BLUE)Installing dev deps...$(NC)"
+	$(VENV_BIN)/pip install -q -r requirements-dev.txt
+	@echo "$(GREEN)✓ Dev deps installed$(NC)"
+
+lint:
+	@echo "$(BLUE)Running flake8...$(NC)"
+	$(VENV_BIN)/flake8 ingestion/ streaming/ schemas/ tests/ --max-line-length=100 --count
+
+format:
+	@echo "$(BLUE)Formatting code...$(NC)"
+	$(VENV_BIN)/black ingestion/ streaming/ schemas/ tests/ --line-length=100 -q
+	$(VENV_BIN)/isort ingestion/ streaming/ schemas/ tests/ --profile=black -q
+	@echo "$(GREEN)✓ Code formatted$(NC)"
+
+format-check:
+	@echo "$(BLUE)Checking format...$(NC)"
+	$(VENV_BIN)/black --check ingestion/ streaming/ schemas/ tests/ --line-length=100
+	$(VENV_BIN)/isort --check-only ingestion/ streaming/ schemas/ tests/ --profile=black
+
+type-check:
+	@echo "$(BLUE)Type checking...$(NC)"
+	$(VENV_BIN)/mypy ingestion/ streaming/ schemas/ --ignore-missing-imports --no-error-summary || true
+	@echo "$(GREEN)✓ Type check complete$(NC)"
+
+security:
+	@echo "$(BLUE)Security scan...$(NC)"
+	$(VENV_BIN)/bandit -r ingestion/ streaming/ schemas/ --skip=B101,B601 -q
+	@echo "$(GREEN)✓ Security check complete$(NC)"
+
+test:
+	@echo "$(BLUE)Running tests...$(NC)"
+	$(VENV_BIN)/pytest tests/ -v --tb=short
+	@echo "$(GREEN)✓ Tests passed$(NC)"
+
+test-cov:
+	@echo "$(BLUE)Tests with coverage...$(NC)"
+	$(VENV_BIN)/pytest tests/ -v --cov=ingestion --cov=streaming --cov-report=html --cov-report=term-missing
+	@echo "$(GREEN)✓ Coverage: htmlcov/index.html$(NC)"
+
+test-integration:
+	@echo "$(BLUE)Integration tests...$(NC)"
+	$(VENV_BIN)/pytest tests/test_integration.py -v
+
+docker-build:
+	@echo "$(BLUE)Building Docker image...$(NC)"
+	docker build -t mpesa-streaming:latest .
+	@echo "$(GREEN)✓ Image built$(NC)"
+
+docker-run:
+	@echo "$(BLUE)Running container...$(NC)"
+	docker run -p 5000:5000 --env-file .env mpesa-streaming:latest
+
+docker-compose-up:
+	@echo "$(BLUE)Starting services...$(NC)"
+	$(DOCKER_COMPOSE) up -d
+	@echo "$(GREEN)✓ Services started$(NC)"
+
+docker-compose-down:
+	@echo "$(BLUE)Stopping services...$(NC)"
+	$(DOCKER_COMPOSE) down
+	@echo "$(GREEN)✓ Services stopped$(NC)"
+
+db-setup:
+	@echo "$(BLUE)Setting up database...$(NC)"
+	bash scripts/setup_db.sh
+	@echo "$(GREEN)✓ DB setup complete$(NC)"
+
+db-seed:
+	@echo "$(BLUE)Loading sample data...$(NC)"
+	PGPASSWORD=$${POSTGRES_PASSWORD:-} psql -h $${POSTGRES_HOST:-localhost} -p $${POSTGRES_PORT:-5432} -U $${POSTGRES_USER:-postgres} \
+		-d $${POSTGRES_DB:-mpesa} -f scripts/sample_data.sql
+	@echo "$(GREEN)✓ Sample data loaded$(NC)"
+
+run-webhook:
+	@echo "$(BLUE)Starting webhook receiver...$(NC)"
+	$(VENV_BIN)/python -m ingestion.webhook_receiver
+
+run-consumer:
+	@echo "$(BLUE)Starting Kafka consumer...$(NC)"
+	$(VENV_BIN)/python -m streaming.kafka_consumer
+
+run-consumer-docker:
+	@echo "$(BLUE)Starting Docker Kafka consumer...$(NC)"
+	$(DOCKER_COMPOSE) up -d kafka-consumer
+
+dbt-debug:
+	@echo "$(BLUE)dbt debug (docker)...$(NC)"
+	$(DOCKER_COMPOSE) --profile tools run --rm dbt debug --profiles-dir .
+
+dbt-run:
+	@echo "$(BLUE)dbt run (docker)...$(NC)"
+	$(DOCKER_COMPOSE) --profile tools run --rm dbt run --profiles-dir .
+
+dbt-test:
+	@echo "$(BLUE)dbt test (docker)...$(NC)"
+	$(DOCKER_COMPOSE) --profile tools run --rm dbt test --profiles-dir .
+
+check: format-check lint type-check test
+	@echo "$(GREEN)✓ All checks passed$(NC)"
+
+clean:
+	@echo "$(BLUE)Cleaning temp files...$(NC)"
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf .mypy_cache/ htmlcov/ .coverage build/ dist/ *.egg-info/
+	@echo "$(GREEN)✓ Clean complete$(NC)"
+
+distclean: clean
+	@echo "$(RED)Removing venv...$(NC)"
+	rm -rf .venv/
+	@echo "$(GREEN)✓ Distclean complete$(NC)"

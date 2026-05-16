@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  webhook-receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DARAJA_ENVIRONMENT: ${DARAJA_ENVIRONMENT:-sandbox}
+      DARAJA_CONSUMER_KEY: ${DARAJA_CONSUMER_KEY:-}
+      DARAJA_CONSUMER_SECRET: ${DARAJA_CONSUMER_SECRET:-}
+      MPESA_BUSINESS_SHORTCODE: ${MPESA_BUSINESS_SHORTCODE:-}
+      MPESA_PASSKEY: ${MPESA_PASSKEY:-}
+      CALLBACK_URL: ${CALLBACK_URL:-}
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:29092}
+      KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-mpesa-transactions}
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+

@@ -1,0 +1,171 @@
+---
+# Main application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mpesa-config
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: config
+data:
+  ENVIRONMENT: "${ENVIRONMENT}"
+  GCP_PROJECT_ID: "${GCP_PROJECT_ID}"
+  GCP_REGION: "${GCP_REGION}"
+  
+  # Pub/Sub Configuration
+  PUBSUB_TRANSACTIONS_TOPIC: "mpesa-transactions-${ENVIRONMENT}"
+  PUBSUB_ENRICHED_TOPIC: "mpesa-enriched-${ENVIRONMENT}"
+  PUBSUB_DLQ_TOPIC: "mpesa-dlq-${ENVIRONMENT}"
+  PUBSUB_TRANSACTIONS_SUB: "mpesa-transactions-sub-${ENVIRONMENT}"
+  PUBSUB_ENRICHED_SUB: "mpesa-enriched-sub-${ENVIRONMENT}"
+  
+  # BigQuery Configuration
+  BIGQUERY_RAW_DATASET: "raw_mpesa_${ENVIRONMENT}"
+  BIGQUERY_STAGING_DATASET: "staging_mpesa_${ENVIRONMENT}"
+  BIGQUERY_ANALYTICS_DATASET: "analytics_mpesa_${ENVIRONMENT}"
+  BIGQUERY_RAW_TABLE: "mpesa_raw_transactions"
+  BIGQUERY_STAGING_TABLE: "stg_mpesa_transactions"
+  BIGQUERY_MART_TABLE: "mart_hourly_transaction_volumes"
+  
+  # Cloud SQL Configuration
+  CLOUD_SQL_INSTANCE: "mps-${ENVIRONMENT}-postgres"
+  CLOUD_SQL_DATABASE: "mpesa_${ENVIRONMENT}"
+  CLOUD_SQL_USER: "mpesa_app"
+  CLOUD_SQL_PORT: "5432"
+  
+  # Application Settings
+  LOG_LEVEL: "${LOG_LEVEL:INFO}"
+  MAX_RETRIES: "3"
+  TIMEOUT_SECONDS: "30"
+  BATCH_SIZE: "100"
+  
+  # Webhook Configuration
+  WEBHOOK_PATH: "/webhook"
+  WEBHOOK_C2B_PATH: "/webhook/c2b"
+  WEBHOOK_B2C_PATH: "/webhook/b2c"
+  WEBHOOK_TIMEOUT: "60"
+  
+  # Consumer Configuration
+  CONSUMER_GROUP: "mpesa-consumer-${ENVIRONMENT}"
+  CONSUMER_INSTANCES: "2"
+  CONSUMER_BATCH_SIZE: "50"
+  CONSUMER_POLL_TIMEOUT_MS: "5000"
+  
+  # Monitoring
+  METRICS_PORT: "8888"
+  HEALTH_CHECK_PATH: "/health"
+  READY_CHECK_PATH: "/ready"
+
+---
+# Consumer state configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consumer-state
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    component: streaming
+data:
+  last_offset: "0"
+  last_checkpoint: ""
+  error_count: "0"
+
+---
+# Application feature flags
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: config
+data:
+  ENABLE_ENRICHMENT: "true"
+  ENABLE_DEDUPLICATION: "true"
+  ENABLE_ANOMALY_DETECTION: "false"
+  ENABLE_CACHING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_AUDIT_LOGGING: "true"
+  SAMPLE_RATE: "1.0"
+
+---
+# Database schema initialization
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-scripts
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: database
+data:
+  00-schema.sql: |
+    -- M-Pesa Transaction Schema
+    CREATE TABLE IF NOT EXISTS mpesa_transactions (
+        id BIGSERIAL PRIMARY KEY,
+        transaction_id VARCHAR(100) UNIQUE NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        amount NUMERIC(15, 2) NOT NULL,
+        transaction_type VARCHAR(50) NOT NULL,
+        merchant_code VARCHAR(100),
+        status VARCHAR(50),
+        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE INDEX idx_transaction_id ON mpesa_transactions(transaction_id);
+    CREATE INDEX idx_phone_number ON mpesa_transactions(phone_number);
+    CREATE INDEX idx_timestamp ON mpesa_transactions(timestamp DESC);
+    CREATE INDEX idx_status ON mpesa_transactions(status);
+  
+  01-permissions.sql: |
+    -- Grant permissions to application user
+    GRANT SELECT, INSERT, UPDATE, DELETE ON mpesa_transactions TO mpesa_app;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO mpesa_app;
+
+---
+# Logging configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logging-config
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: logging
+data:
+  python-logging.yaml: |
+    version: 1
+    disable_existing_loggers: false
+    formatters:
+      standard:
+        format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+      json:
+        format: '{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        level: DEBUG
+        formatter: json
+        stream: ext://sys.stdout
+    loggers:
+      mpesa:
+        level: INFO
+        handlers: [console]
+        propagate: false
+      webhook:
+        level: INFO
+        handlers: [console]
+        propagate: false
+      consumer:
+        level: INFO
+        handlers: [console]
+        propagate: false
+    root:
+      level: INFO
+      handlers: [console]

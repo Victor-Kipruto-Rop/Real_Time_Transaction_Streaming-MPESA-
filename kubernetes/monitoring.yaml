@@ -1,0 +1,252 @@
+---
+# ServiceMonitor for Prometheus scraping
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mpesa-webhook
+  namespace: mpesa-pipeline
+  labels:
+    app: webhook
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: webhook
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# ServiceMonitor for consumer
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mpesa-consumer
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: consumer
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# ServiceMonitor for processor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mpesa-processor
+  namespace: mpesa-pipeline
+  labels:
+    app: processor
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: processor
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mpesa-alerts
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: mpesa.rules
+    interval: 30s
+    rules:
+    - alert: WebhookHighErrorRate
+      expr: |
+        (
+          rate(webhook_errors_total[5m]) > 0.05
+        )
+      for: 5m
+      labels:
+        severity: warning
+        component: webhook
+      annotations:
+        summary: "High error rate in webhook service"
+        description: "Error rate is {{ $value | humanizePercentage }} for webhook"
+    
+    - alert: ConsumerLag
+      expr: |
+        (
+          pubsub_consumer_lag > 1000
+        )
+      for: 5m
+      labels:
+        severity: warning
+        component: consumer
+      annotations:
+        summary: "Consumer lag is high"
+        description: "Lag is {{ $value }} messages behind"
+    
+    - alert: ProcessorHighCPU
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{pod=~"processor.*"}[5m]) > 0.8
+        )
+      for: 5m
+      labels:
+        severity: warning
+        component: processor
+      annotations:
+        summary: "Processor CPU usage is high"
+        description: "CPU usage is {{ $value | humanizePercentage }}"
+    
+    - alert: PodCrashLooping
+      expr: |
+        (
+          rate(kube_pod_container_status_restarts_total{namespace="mpesa-pipeline"}[15m]) > 0
+        )
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is crash looping"
+        description: "Pod has restarted {{ $value }} times in the last 15 minutes"
+    
+    - alert: PersistentVolumeUsageHigh
+      expr: |
+        (
+          kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.8
+        ) and on (persistentvolumeclaim) (
+          kube_persistentvolumeclaim_labels{namespace="mpesa-pipeline"}
+        )
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "PVC {{ $labels.persistentvolumeclaim }} is 80% full"
+        description: "Usage is {{ $value | humanizePercentage }}"
+
+---
+# GrafanaDashboard for visualization (optional)
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: mpesa-pipeline
+  namespace: mpesa-pipeline
+  labels:
+    grafana_dashboard: "1"
+spec:
+  json: |
+    {
+      "dashboard": {
+        "title": "M-Pesa Streaming Pipeline",
+        "panels": [
+          {
+            "title": "Transaction Volume",
+            "targets": [
+              {
+                "expr": "rate(mpesa_transactions_total[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Error Rate",
+            "targets": [
+              {
+                "expr": "rate(webhook_errors_total[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Consumer Lag",
+            "targets": [
+              {
+                "expr": "pubsub_consumer_lag"
+              }
+            ]
+          },
+          {
+            "title": "Processing Latency",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(processing_duration_seconds_bucket[5m]))"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# LoggingConfig for Google Cloud Logging
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: logging
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Daemon        off
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*mpesa*.log
+        Parser            json
+        Tag               kube.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     50MB
+
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Merge_Log           On
+
+    [OUTPUT]
+        Name  stackdriver
+        Match *
+        google_service_credentials /var/secrets/google/key.json
+        resource k8s_container
+        resource_labels project_id=${GCP_PROJECT_ID},location=${GCP_REGION}
+
+---
+# EventExporter for Kubernetes events
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: event-exporter-config
+  namespace: mpesa-pipeline
+  labels:
+    app: mpesa-pipeline
+    component: logging
+data:
+  config.yaml: |
+    logLevel: info
+    logFormat: json
+    receivers:
+      - type: events
+    processors:
+      - type: batch
+        batchSize: 100
+        timeout: 10s
+    exporters:
+      - type: stackdriver
+        useInsecureConnection: false
+        serviceAccountKeyFile: /var/secrets/google/key.json

@@ -1,0 +1,25 @@
+name: mpesa_streaming
+version: "1.0.0"
+config-version: 2
+
+profile: mpesa_streaming
+
+model-paths: ["models"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  mpesa_streaming:
+    +materialized: view
+    staging:
+      +schema: staging
+    marts:
+      +schema: marts
+

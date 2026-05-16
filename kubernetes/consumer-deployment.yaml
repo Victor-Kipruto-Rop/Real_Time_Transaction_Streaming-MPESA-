@@ -1,0 +1,257 @@
+---
+# Consumer service deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+  namespace: mpesa-pipeline
+  labels:
+    app: consumer
+    component: streaming
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+        component: streaming
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: consumer-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      imagePullSecrets:
+      - name: docker-registry
+      
+      containers:
+      - name: consumer
+        image: "us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/mpesa-docker/consumer:latest"
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 8888
+          protocol: TCP
+        
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: ENVIRONMENT
+        - name: GCP_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: GCP_PROJECT_ID
+        - name: GCP_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: GCP_REGION
+        - name: PUBSUB_TRANSACTIONS_SUB
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: PUBSUB_TRANSACTIONS_SUB
+        - name: PUBSUB_ENRICHED_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: PUBSUB_ENRICHED_TOPIC
+        - name: BIGQUERY_STAGING_DATASET
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: BIGQUERY_STAGING_DATASET
+        - name: BIGQUERY_STAGING_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: BIGQUERY_STAGING_TABLE
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: LOG_LEVEL
+        - name: CONSUMER_BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: CONSUMER_BATCH_SIZE
+        - name: CONSUMER_POLL_TIMEOUT_MS
+          valueFrom:
+            configMapKeyRef:
+              name: mpesa-config
+              key: CONSUMER_POLL_TIMEOUT_MS
+        
+        # Secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: connection-string
+        - name: PUBSUB_CREDENTIALS
+          valueFrom:
+            secretKeyRef:
+              name: pubsub-credentials
+              key: gcp-service-account-key.json
+        
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+        - name: state
+          mountPath: /app/state
+        - name: logs
+          mountPath: /app/logs
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: state
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - consumer
+              topologyKey: kubernetes.io/hostname
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - processor
+              topologyKey: kubernetes.io/hostname
+      
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "streaming"
+        effect: "NoSchedule"
+      
+      terminationGracePeriodSeconds: 60
+
+---
+# Pod Disruption Budget for consumer
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: consumer-pdb
+  namespace: mpesa-pipeline
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: consumer
+
+---
+# Horizontal Pod Autoscaler for consumer
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: consumer-hpa
+  namespace: mpesa-pipeline
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: consumer
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 30
+      selectPolicy: Max
