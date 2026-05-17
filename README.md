@@ -1,11 +1,9 @@
 <p align="center">
-  <img src="./a_high_resolution_infographic_diagram_poster_for_a.png" alt="M-Pesa Real-Time Streaming Pipeline" width="100%">
+  <img src="./assets/image.png" alt="M-Pesa Real-Time Streaming Pipeline" width="100%">
 </p>
 
 # M-Pesa Real-Time Transaction Streaming Pipeline
 
-## Difficulty: Intermediate → Advanced  
-## Impact: High  
 ## Category: Real-Time Data Engineering / FinTech Analytics
 
 ---
@@ -70,8 +68,9 @@ Grafana / Streamlit Dashboard
 ## Clone Repository
 
 ```bash
-git clone https://github.com/kipruto45/mpesa_safaricom-pipeline-.git
-cd mpesa_safaricom-pipeline-
+git clone https://github.com/kipruto45/Real_Time_Transaction_Streaming-MPESA-.git
+
+cd Real_Time_Transaction_Streaming-MPESA-
 ```
 
 ## Start Services
