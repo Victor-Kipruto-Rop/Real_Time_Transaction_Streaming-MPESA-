@@ -50,7 +50,8 @@ models:
         description: "Categorized transaction amount (low/medium/high)"
         tests:
           - accepted_values:
-              values: ["low", "medium", "high"]
+              arguments:
+                values: ["low", "medium", "high"]
       - name: transaction_date
         description: "Transaction date"
         tests:

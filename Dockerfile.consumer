@@ -5,11 +5,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-runtime.txt ./requirements-runtime.txt
+RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 COPY streaming ./streaming
 COPY schemas ./schemas
 
 CMD ["python", "-m", "streaming.kafka_consumer"]
-

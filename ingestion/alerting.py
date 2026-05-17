@@ -46,25 +46,31 @@ class AlertManager:
                 "success": "#00FF00",
             }
 
+            fields = [
+                {
+                    "title": "Timestamp",
+                    "value": datetime.utcnow().isoformat(),
+                },
+                {
+                    "title": "Environment",
+                    "value": os.getenv("ENVIRONMENT", "unknown"),
+                },
+            ]
+
+            if details:
+                fields.extend({"title": k, "value": str(v)} for k, v in details.items())
+
             payload = {
                 "attachments": [
                     {
                         "color": color_map.get(severity, "#808080"),
                         "title": f"M-Pesa Pipeline Alert - {severity.upper()}",
                         "text": message,
-                        "fields": [
-                            {"title": "Timestamp", "value": datetime.utcnow().isoformat()},
-                            {"title": "Environment", "value": os.getenv("ENVIRONMENT", "unknown")},
-                        ],
+                        "fields": fields,
                         "footer": "M-Pesa Streaming Pipeline",
                     }
                 ]
             }
-
-            if details:
-                payload["attachments"][0]["fields"].extend(
-                    {"title": k, "value": str(v)} for k, v in details.items()
-                )
 
             response = requests.post(self.slack_webhook, json=payload, timeout=5)
             return response.status_code == 200
@@ -99,8 +105,10 @@ class AlertManager:
             with smtplib.SMTP(smtp_server, smtp_port) as server:
                 if os.getenv("SMTP_TLS"):
                     server.starttls()
-                if os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"):
-                    server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASSWORD"))
+                smtp_user = os.getenv("SMTP_USER")
+                smtp_password = os.getenv("SMTP_PASSWORD")
+                if smtp_user and smtp_password:
+                    server.login(smtp_user, smtp_password)
                 server.send_message(message)
 
             logger.info(f"Email alert sent to {', '.join(self.email_recipients)}")
@@ -146,9 +154,13 @@ class AlertManager:
             details={"component": "Kafka Consumer", "lag": lag, "threshold": threshold},
         )
 
-    def alert_data_staleness(self, staleness_seconds: int, threshold: int = 300) -> None:
+    def alert_data_staleness(
+        self, staleness_seconds: int, threshold: int = 300
+    ) -> None:
         """Alert when data becomes stale."""
-        message = f"Data staleness warning: {staleness_seconds}s (threshold: {threshold}s)"
+        message = (
+            f"Data staleness warning: {staleness_seconds}s (threshold: {threshold}s)"
+        )
         self.send_slack_alert(
             message,
             severity="warning",
@@ -167,7 +179,9 @@ class AlertManager:
     ) -> None:
         """Alert when transaction volume deviates significantly."""
         deviation = abs(actual_volume - expected_volume)
-        deviation_percent = (deviation / expected_volume * 100) if expected_volume > 0 else 0
+        deviation_percent = (
+            (deviation / expected_volume * 100) if expected_volume > 0 else 0
+        )
 
         message = (
             f"Transaction volume anomaly detected. Expected: {expected_volume}, "
@@ -208,7 +222,9 @@ class AlertManager:
             severity="error",
         )
 
-    def alert_fraud_detected(self, transaction_id: str, details: Dict[str, Any]) -> None:
+    def alert_fraud_detected(
+        self, transaction_id: str, details: Dict[str, Any]
+    ) -> None:
         """Alert when fraud is detected."""
         message = f"Potential fraud detected in transaction {transaction_id}"
         self.send_slack_alert(

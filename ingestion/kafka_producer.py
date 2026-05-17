@@ -30,7 +30,9 @@ class MpesaKafkaProducer:
     """
 
     def __init__(
-        self, bootstrap_servers: str = "localhost:9092", topic: str = "mpesa-transactions"
+        self,
+        bootstrap_servers: str = "localhost:9092",
+        topic: str = "mpesa-transactions",
     ):
         """
         Initialize Kafka producer.
@@ -85,7 +87,9 @@ class MpesaKafkaProducer:
         target_topic = topic or self.topic
 
         try:
-            payload = event.model_dump(mode="json") if hasattr(event, "model_dump") else event
+            payload = (
+                event.model_dump(mode="json") if hasattr(event, "model_dump") else event
+            )
             self._producer.produce(
                 target_topic,
                 value=json.dumps(payload).encode("utf-8"),
@@ -158,11 +162,15 @@ class MpesaKafkaProducer:
         # Flush to ensure all messages are sent
         self._producer.flush(10)
 
-        logger.info(f"Batch published: {success_count}/{len(transactions)} transactions")
+        logger.info(
+            f"Batch published: {success_count}/{len(transactions)} transactions"
+        )
 
         return success_count
 
-    def publish_fraud_alert(self, alert: Dict[str, Any], severity: str = "medium") -> bool:
+    def publish_fraud_alert(
+        self, alert: Dict[str, Any], severity: str = "medium"
+    ) -> bool:
         """
         Publish a fraud alert event.
 
@@ -201,7 +209,8 @@ if __name__ == "__main__":
 
     # Initialize producer
     producer = MpesaKafkaProducer(
-        bootstrap_servers=os.getenv("KAFKA_BROKERS", "localhost:9092"), topic="mpesa-transactions"
+        bootstrap_servers=os.getenv("KAFKA_BROKERS", "localhost:9092"),
+        topic="mpesa-transactions",
     )
 
     # Example transaction

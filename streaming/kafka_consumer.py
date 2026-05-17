@@ -108,7 +108,9 @@ class MpesaKafkaConsumer:
             batch_size: Batch size for database inserts
         """
         self.brokers = brokers or os.getenv("KAFKA_BROKERS", "localhost:9092")
-        self.topic = topic or os.getenv("KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions")
+        self.topic = topic or os.getenv(
+            "KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions"
+        )
         self.group_id = group_id or os.getenv("KAFKA_GROUP_ID", "mpesa_consumer_group")
         self.postgres_dsn = postgres_dsn or postgres_dsn_from_env()
         self.batch_size = batch_size
@@ -219,7 +221,9 @@ class MpesaKafkaConsumer:
                     if cur.rowcount and cur.rowcount > 0:
                         logger.info("Inserted transaction: %s", event.transaction_id)
                         return True
-                    logger.info("Skipped duplicate transaction: %s", event.transaction_id)
+                    logger.info(
+                        "Skipped duplicate transaction: %s", event.transaction_id
+                    )
                     return False
         except Exception as e:
             logger.error(f"Failed to insert transaction: {e}")
@@ -256,7 +260,9 @@ class MpesaKafkaConsumer:
 
                     if self.insert_raw(event):
                         count += 1
-                        logger.info(f"Processed event: {event.event_type} / {event.transaction_id}")
+                        logger.info(
+                            f"Processed event: {event.event_type} / {event.transaction_id}"
+                        )
                 except Exception as e:
                     logger.warning(f"Dropping invalid event: {e}")
                     continue

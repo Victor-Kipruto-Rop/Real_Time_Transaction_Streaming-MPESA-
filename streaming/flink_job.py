@@ -56,7 +56,9 @@ try:
     PYFLINK_AVAILABLE = True
 except ImportError:
     PYFLINK_AVAILABLE = False
-    logger.warning("PyFlink not installed. Install requirements.all.txt to enable Flink streaming.")
+    logger.warning(
+        "PyFlink not installed. Install requirements.all.txt to enable Flink streaming."
+    )
 
 
 if PYFLINK_AVAILABLE:
@@ -123,7 +125,9 @@ if PYFLINK_AVAILABLE:
             """Initialize state for velocity detection."""
             # State to store list of recent transaction timestamps
             state_descriptor = ListStateDescriptor("recent_transactions", Types.LONG())
-            self.recent_txns_state: ListState = runtime_context.get_list_state(state_descriptor)
+            self.recent_txns_state: ListState = runtime_context.get_list_state(
+                state_descriptor
+            )
 
         def process_element(self, element: Dict[str, Any], ctx):
             """Check velocity for this transaction."""
@@ -131,7 +135,9 @@ if PYFLINK_AVAILABLE:
 
             # Get recent transaction times
             recent_times = (
-                list(self.recent_txns_state.get()) if self.recent_txns_state.get() else []
+                list(self.recent_txns_state.get())
+                if self.recent_txns_state.get()
+                else []
             )
 
             # Remove old transactions (outside 60-second window)
@@ -173,9 +179,15 @@ if PYFLINK_AVAILABLE:
             avg_amount = total_amount / count if count > 0 else 0
 
             # Collect by amount category
-            low_count = sum(1 for t in transactions if t.get("amount_category") == "low")
-            med_count = sum(1 for t in transactions if t.get("amount_category") == "medium")
-            high_count = sum(1 for t in transactions if t.get("amount_category") == "high")
+            low_count = sum(
+                1 for t in transactions if t.get("amount_category") == "low"
+            )
+            med_count = sum(
+                1 for t in transactions if t.get("amount_category") == "medium"
+            )
+            high_count = sum(
+                1 for t in transactions if t.get("amount_category") == "high"
+            )
 
             # Create output record
             result = {
@@ -248,7 +260,9 @@ if PYFLINK_AVAILABLE:
             # Normal transaction
             else:
                 transaction["anomaly_flag"] = False
-                transaction["risk_score"] = 10 + (amount / self.MAX_SINGLE_TRANSACTION) * 30
+                transaction["risk_score"] = (
+                    10 + (amount / self.MAX_SINGLE_TRANSACTION) * 30
+                )
 
             return transaction
 
@@ -292,7 +306,9 @@ if PYFLINK_AVAILABLE:
         logger.info("Starting Flink M-Pesa streaming job...")
 
         # Create Kafka source
-        kafka_source = create_kafka_consumer(kafka_brokers, [input_topic], consumer_group)
+        kafka_source = create_kafka_consumer(
+            kafka_brokers, [input_topic], consumer_group
+        )
 
         # Add source to stream
         transaction_stream = env.add_source(kafka_source)
@@ -304,21 +320,27 @@ if PYFLINK_AVAILABLE:
         anomaly_detected_stream = enriched_stream.map(AnomalyDetector())
 
         # 3. Key by phone number for stateful processing
-        keyed_stream = anomaly_detected_stream.key_by(lambda x: x.get("MSISDN", "unknown"))
+        keyed_stream = anomaly_detected_stream.key_by(
+            lambda x: x.get("MSISDN", "unknown")
+        )
 
         # 4. Apply velocity detection
         velocity_checked_stream = keyed_stream.process(VelocityDetector())
 
         # 5. Create hourly aggregations (tumbling window)
         hourly_aggregations = (
-            velocity_checked_stream.key_by(lambda x: x.get("amount_category", "unknown"))
+            velocity_checked_stream.key_by(
+                lambda x: x.get("amount_category", "unknown")
+            )
             .window(TumblingEventTimeWindows.of(Time.hours(1)))
             .apply(HourlyAggregationFunction())
         )
 
         # 6. Create 15-minute aggregations (sliding window)
         sliding_aggregations = (
-            velocity_checked_stream.key_by(lambda x: x.get("amount_category", "unknown"))
+            velocity_checked_stream.key_by(
+                lambda x: x.get("amount_category", "unknown")
+            )
             .window(SlidingEventTimeWindows.of(Time.minutes(15), Time.minutes(5)))
             .apply(FifteenMinuteAggregationFunction())
         )
@@ -355,7 +377,9 @@ def main() -> None:
     )
 
     if not PYFLINK_AVAILABLE:
-        print("PyFlink is not installed. Install requirements.all.txt to enable Flink streaming.")
+        print(
+            "PyFlink is not installed. Install requirements.all.txt to enable Flink streaming."
+        )
         print("\nTo run this job:")
         print("1. Install: pip install -r requirements.all.txt")
         print("2. Configure environment variables for Kafka/DB")

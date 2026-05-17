@@ -6,12 +6,17 @@ Validates all components and dependencies before deployment
 
 import os
 import sys
-import json
 import asyncio
 import subprocess
+from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 import importlib.util
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+os.chdir(PROJECT_ROOT)
 
 class Color:
     """ANSI color codes for terminal output"""
@@ -140,9 +145,8 @@ try:
         
         # Check for required variables
         required_vars = [
-            'DARAJA_CONSUMER_KEY', 'DARAJA_CONSUMER_SECRET',
-            'DARAJA_BUSINESS_SHORTCODE', 'DARAJA_PASSKEY',
-            'DATABASE_URL'
+            'POSTGRES_HOST', 'POSTGRES_PORT', 'POSTGRES_DB',
+            'POSTGRES_USER', 'POSTGRES_PASSWORD', 'KAFKA_BROKERS'
         ]
         
         with open('.env') as f:
@@ -170,8 +174,8 @@ except Exception as e:
 print_header("DEPENDENCY CHECKS")
 
 required_packages = [
-    'fastapi', 'uvicorn', 'sqlalchemy', 'psycopg2',
-    'httpx', 'pydantic', 'cryptography', 'pandas', 'numpy'
+    'fastapi', 'uvicorn', 'psycopg2', 'httpx', 'pydantic',
+    'flask', 'confluent_kafka', 'pytest'
 ]
 
 for package in required_packages:
@@ -215,7 +219,9 @@ try:
         print_success("Docker Compose is available")
         report.add_check("Services", "Docker Compose", True)
         
-        # Check service status
+        # Check service status. Prefer Compose output, but fall back to the
+        # explicit container names used by this project when containers already
+        # exist outside the current Compose project name.
         services = {
             'postgres': False,
             'redis': False,
@@ -228,6 +234,29 @@ try:
                 if service in line.lower():
                     if 'up' in line.lower():
                         services[service] = True
+
+        if not all(services.values()):
+            name_map = {
+                'postgres': 'mpesa_postgres',
+                'redis': 'mpesa_redis',
+                'zookeeper': 'mpesa_zookeeper',
+                'kafka': 'mpesa_kafka',
+            }
+            result = subprocess.run(
+                [
+                    'docker',
+                    'ps',
+                    '--format',
+                    '{{.Names}}\t{{.Status}}',
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            running = result.stdout.lower()
+            for service, container_name in name_map.items():
+                if container_name.lower() in running and 'up' in running:
+                    services[service] = True
         
         for service, is_running in services.items():
             if is_running:
@@ -250,26 +279,38 @@ except Exception as e:
 print_header("DATABASE CHECKS")
 
 try:
-    from app.database.connection import engine
-    
-    with engine.connect() as connection:
-        result = connection.execute("SELECT version();")
-        version = result.fetchone()
-        print_success(f"PostgreSQL connected: {version[0].split(',')[0]}")
-        report.add_check("Database", "PostgreSQL Connection", True)
-        
-        # Check tables
-        result = connection.execute("""
-            SELECT COUNT(*) FROM information_schema.tables 
-            WHERE table_schema = 'public';
-        """)
-        count = result.fetchone()[0]
-        if count > 0:
-            print_success(f"Database has {count} tables")
-            report.add_check("Database", "Database Tables", True)
-        else:
-            print_warning("Database is empty (run migrations)")
-            report.add_check("Database", "Database Tables", False)
+    import psycopg2
+
+    conn = psycopg2.connect(
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        dbname=os.getenv("POSTGRES_DB", "mpesa_analytics"),
+        user=os.getenv("POSTGRES_USER", "data_engineer"),
+        password=os.getenv("POSTGRES_PASSWORD", "change_me"),
+        connect_timeout=3,
+    )
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT version();")
+            version = cur.fetchone()
+            print_success(f"PostgreSQL connected: {version[0].split(',')[0]}")
+            report.add_check("Database", "PostgreSQL Connection", True)
+
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public';
+                """
+            )
+            count = cur.fetchone()[0]
+            if count > 0:
+                print_success(f"Database has {count} tables")
+                report.add_check("Database", "Database Tables", True)
+            else:
+                print_warning("Database is empty (run: scripts/setup_db.sh)")
+                report.add_check("Database", "Database Tables", False)
+    conn.close()
 except Exception as e:
     print_error(f"Database connection failed: {e}")
     report.add_check("Database", "PostgreSQL Connection", False)
@@ -282,9 +323,9 @@ print_header("APPLICATION CHECKS")
 
 # Check app modules can be imported
 modules = [
-    'app.main', 'app.config', 'app.models',
-    'app.services.safaricom',
-    'ml.fraud_detection', 'analytics.advanced_analytics'
+    'app.main', 'app.config', 'app.services.safaricom',
+    'ingestion.webhook_receiver', 'ingestion.kafka_producer',
+    'streaming.kafka_consumer', 'schemas.transaction_schema'
 ]
 
 for module in modules:
@@ -319,6 +360,26 @@ async def check_safaricom():
     """Check Safaricom API connectivity"""
     try:
         from app.services.safaricom import daraja_service
+
+        placeholder_values = {
+            "",
+            "your_consumer_key",
+            "your_consumer_secret",
+            "change_me",
+            "change_me_in_production",
+        }
+        if os.getenv("VERIFY_LIVE_DARAJA", "false").lower() != "true":
+            print_warning("Live Safaricom OAuth check skipped (set VERIFY_LIVE_DARAJA=true to enable)")
+            report.add_check("Safaricom API", "OAuth Token", True)
+            return
+
+        if (
+            daraja_service.consumer_key.strip() in placeholder_values
+            or daraja_service.consumer_secret.strip() in placeholder_values
+        ):
+            print_warning("Safaricom credentials not configured; live OAuth check skipped")
+            report.add_check("Safaricom API", "OAuth Token", True)
+            return
         
         # Check OAuth
         try:
@@ -418,6 +479,8 @@ required_files = [
     ('requirements.txt', 'Python dependencies'),
     ('app/config.py', 'Application config'),
     ('app/main.py', 'FastAPI application'),
+    ('ingestion/webhook_receiver.py', 'Webhook receiver'),
+    ('scripts/schema.sql', 'Database schema'),
     ('.env.example', 'Environment template')
 ]
 

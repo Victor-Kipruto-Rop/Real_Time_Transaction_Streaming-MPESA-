@@ -83,7 +83,11 @@ class STKPushHandler:
         return STKStatus.FAILED
 
     def initiate_stk_push(
-        self, phone_number: str, amount: int, account_reference: str, description: str = "Payment"
+        self,
+        phone_number: str,
+        amount: int,
+        account_reference: str,
+        description: str = "Payment",
     ) -> Dict[str, Any]:
         """Initiate STK push payment request.
 
@@ -103,7 +107,9 @@ class STKPushHandler:
             phone_number=phone, amount=amount, description=description
         )
 
-        checkout_id = response.get("CheckoutRequestID") or response.get("checkout_request_id")
+        checkout_id = response.get("CheckoutRequestID") or response.get(
+            "checkout_request_id"
+        )
         now = datetime.now(timezone.utc).isoformat()
 
         if checkout_id:
@@ -164,28 +170,30 @@ class STKPushHandler:
         result_code = int(stk.get("ResultCode", -1))
         result_desc = stk.get("ResultDesc", "")
 
+        checkout_key = checkout_id if isinstance(checkout_id, str) else "unknown"
+
         status = self._status_from_result_code(result_code).value
         now = datetime.now(timezone.utc).isoformat()
 
-        txn = self.transactions.get(checkout_id, {})
+        txn = self.transactions.get(checkout_key, {})
         txn.update(
             {
-                "checkout_request_id": checkout_id,
+                "checkout_request_id": checkout_key,
                 "status": status,
                 "result_code": result_code,
                 "result_desc": result_desc,
                 "completed_at": now,
             }
         )
-        if checkout_id:
-            self.transactions[checkout_id] = txn
-            self._persist_callback(checkout_id)
+        if checkout_key != "unknown":
+            self.transactions[checkout_key] = txn
+            self._persist_callback(checkout_key)
 
-        if self._producer and checkout_id:
+        if self._producer and checkout_key != "unknown":
             self._producer.publish_event(
                 event={
                     "event_type": "stk_callback",
-                    "checkout_request_id": checkout_id,
+                    "checkout_request_id": checkout_key,
                     "result_code": result_code,
                     "result_desc": result_desc,
                     "transaction": txn,
@@ -194,9 +202,15 @@ class STKPushHandler:
                 key=txn.get("phone"),
             )
 
-        return {"checkout_request_id": checkout_id, "status": status, "result_code": result_code}
+        return {
+            "checkout_request_id": checkout_key,
+            "status": status,
+            "result_code": result_code,
+        }
 
-    def get_transaction_status(self, checkout_request_id: str) -> Optional[Dict[str, Any]]:
+    def get_transaction_status(
+        self, checkout_request_id: str
+    ) -> Optional[Dict[str, Any]]:
         return self.transactions.get(checkout_request_id)
 
     def _persist_initiation(self, checkout_request_id: str) -> None:

@@ -13,7 +13,16 @@ NC := \033[0m
 
 PYTHON := python3
 VENV := .venv
+VENV_PYTHON := $(VENV)/bin/python
 DOCKER_COMPOSE := docker compose
+POSTGRES_HOST ?= localhost
+POSTGRES_HOST_PORT ?= 5432
+POSTGRES_PORT ?= $(POSTGRES_HOST_PORT)
+POSTGRES_DB ?= mpesa_analytics
+POSTGRES_USER ?= data_engineer
+POSTGRES_PASSWORD ?= change_me
+DBT_LOG_PATH ?= /tmp/mpesa-dbt-logs
+DBT_TARGET_PATH ?= /tmp/mpesa-dbt-target
 
 help:
 	@echo "$(BLUE)M-Pesa Analytics Platform - Complete Commands$(NC)"
@@ -69,17 +78,17 @@ setup:
 		echo "Creating virtual environment..."; \
 		$(PYTHON) -m venv $(VENV); \
 	fi
-	@. $(VENV)/bin/activate && pip install -r requirements.txt
+	@$(VENV_PYTHON) -m pip install -r requirements.txt
 	@echo "$(GREEN)✓ Setup complete$(NC)"
 
 verify:
 	@echo "$(BLUE)Verifying M-Pesa Analytics Platform...$(NC)"
-	@. $(VENV)/bin/activate && python verify_setup.py
+	@$(VENV_PYTHON) scripts/verify_setup.py
 	@echo "$(GREEN)✓ Verification complete$(NC)"
 
 test-api:
 	@echo "$(BLUE)Testing Daraja API...$(NC)"
-	@. $(VENV)/bin/activate && python test_daraja.py
+	@$(VENV_PYTHON) -m pytest tests/test_daraja_client.py -v
 	@echo "$(GREEN)✓ API test complete$(NC)"
 
 # ============================================================================
@@ -113,26 +122,30 @@ grafana-up:
 
 ingest:
 	@echo "$(BLUE)Starting Kafka consumer...$(NC)"
-	@. $(VENV)/bin/activate && python ingestion/kafka_consumer.py
+	@$(VENV_PYTHON) ingestion/kafka_consumer.py
 
 transform:
 	@echo "$(BLUE)Running DBT transformations...$(NC)"
-	@cd dbt && dbt run --profiles-dir profiles/ && dbt test --profiles-dir profiles/
+	@POSTGRES_HOST=$(POSTGRES_HOST) POSTGRES_PORT=$(POSTGRES_PORT) POSTGRES_DB=$(POSTGRES_DB) POSTGRES_USER=$(POSTGRES_USER) POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+		$(VENV_PYTHON) -m dbt.cli.main --log-path $(DBT_LOG_PATH) run --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
+	@POSTGRES_HOST=$(POSTGRES_HOST) POSTGRES_PORT=$(POSTGRES_PORT) POSTGRES_DB=$(POSTGRES_DB) POSTGRES_USER=$(POSTGRES_USER) POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+		$(VENV_PYTHON) -m dbt.cli.main --log-path $(DBT_LOG_PATH) test --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
 	@echo "$(GREEN)✓ Transformations complete$(NC)"
 
 analytics:
 	@echo "$(BLUE)Running advanced analytics...$(NC)"
-	@. $(VENV)/bin/activate && python analytics/advanced_analytics.py | tee reports/analytics_report.json
+	@mkdir -p reports
+	@$(VENV_PYTHON) analytics/advanced_analytics.py | tee reports/analytics_report.json
 	@echo "$(GREEN)✓ Analytics complete$(NC)"
 
 fraud-detection:
 	@echo "$(BLUE)Training fraud detection models...$(NC)"
-	@. $(VENV)/bin/activate && python ml/fraud_detection.py
+	@$(VENV_PYTHON) ml/fraud_detection.py
 	@echo "$(GREEN)✓ Fraud models trained$(NC)"
 
 dashboards:
 	@echo "$(BLUE)Generating dashboards...$(NC)"
-	@. $(VENV)/bin/activate && python dashboards/grafana_dashboards.py
+	@$(VENV_PYTHON) dashboards/grafana_dashboards.py
 	@echo "$(GREEN)✓ Dashboards generated$(NC)"
 
 # ============================================================================
@@ -140,16 +153,17 @@ dashboards:
 # ============================================================================
 
 db-connect:
-	@psql -h localhost -p 5433 -U data_engineer -d mpesa_analytics
+	@psql -h $(POSTGRES_HOST) -p $(POSTGRES_PORT) -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
 db-status:
 	@echo "$(BLUE)Database Statistics:$(NC)"
-	@psql -h localhost -p 5433 -U data_engineer -d mpesa_analytics -c \
+	@psql -h $(POSTGRES_HOST) -p $(POSTGRES_PORT) -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c \
 		"SELECT COUNT(*) as raw_transactions FROM mpesa_transactions_raw; SELECT COUNT(DISTINCT phone_number) as unique_customers FROM mpesa_transactions_raw; SELECT SUM(amount) as total_volume FROM mpesa_transactions_raw WHERE DATE(transaction_time) = CURRENT_DATE;"
 
 db-backup:
 	@echo "$(BLUE)Backing up database...$(NC)"
-	@pg_dump -h localhost -p 5433 -U data_engineer mpesa_analytics > backups/mpesa_$(shell date +%Y%m%d_%H%M%S).sql
+	@mkdir -p backups
+	@pg_dump -h $(POSTGRES_HOST) -p $(POSTGRES_PORT) -U $(POSTGRES_USER) $(POSTGRES_DB) > backups/mpesa_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "$(GREEN)✓ Backup complete$(NC)"
 
 # ============================================================================
@@ -158,17 +172,47 @@ db-backup:
 
 test:
 	@echo "$(BLUE)Running tests...$(NC)"
-	@. $(VENV)/bin/activate && pytest tests/ -v
+	@$(VENV_PYTHON) -m pytest tests/ -v
+
+test-all: test
+
+test-unit:
+	@echo "$(BLUE)Running unit tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests -v --ignore=tests/e2e --ignore=tests/security --ignore=tests/load
+
+test-integration:
+	@echo "$(BLUE)Running integration tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_integration.py -v
+
+test-e2e:
+	@echo "$(BLUE)Running end-to-end tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/e2e -v
+
+test-security:
+	@echo "$(BLUE)Running security tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/security -v
 
 lint:
 	@echo "$(BLUE)Running linting...$(NC)"
-	@. $(VENV)/bin/activate && flake8 ingestion/ analytics/ ml/ security/
+	@$(VENV_PYTHON) -m flake8 ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/ --max-line-length=100
 	@echo "$(GREEN)✓ Linting passed$(NC)"
 
 format:
 	@echo "$(BLUE)Formatting code...$(NC)"
-	@. $(VENV)/bin/activate && black ingestion/ analytics/ ml/ security/
+	@$(VENV_PYTHON) -m black ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
+
+type-check:
+	@echo "$(BLUE)Running type checks...$(NC)"
+	@$(VENV_PYTHON) -m mypy ingestion/ streaming/ schemas/ app/ \
+		--explicit-package-bases \
+		--ignore-missing-imports \
+		--disable-error-code=import-untyped \
+		--no-error-summary
+
+coverage:
+	@echo "$(BLUE)Running coverage...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/ --cov=ingestion --cov=streaming --cov=schemas --cov=app --cov-report=term-missing
 
 # ============================================================================
 # PRODUCTION & SECURITY
@@ -176,7 +220,7 @@ format:
 
 security-check:
 	@echo "$(BLUE)Checking security policies...$(NC)"
-	@. $(VENV)/bin/activate && python security/gcp_integration.py
+	@$(VENV_PYTHON) security/gcp_integration.py
 
 gcp-setup:
 	@echo "$(BLUE)GCP Setup Instructions:$(NC)"
@@ -218,7 +262,7 @@ run-all:
 	@echo "$(GREEN)✓ All components running$(NC)"
 	@echo ""
 	@echo "Services:"
-	@echo "  PostgreSQL:  localhost:5433"
+	@echo "  PostgreSQL:  $(POSTGRES_HOST):$(POSTGRES_PORT)"
 	@echo "  Kafka:       localhost:9092"
 	@echo "  Grafana:     http://localhost:3000"
 	@echo ""

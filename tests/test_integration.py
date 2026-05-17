@@ -63,7 +63,9 @@ class TestEndToEndWebhookFlow:
         # Step 3: Consumer receives from Kafka
         consumer = mock_system["kafka_consumer"]
         consumer.poll = MagicMock(
-            return_value={MagicMock(): MagicMock(value=json.dumps(webhook_payload).encode())}
+            return_value={
+                MagicMock(): MagicMock(value=json.dumps(webhook_payload).encode())
+            }
         )
 
         # Step 4: Database persists
@@ -158,7 +160,9 @@ class TestKafkaMessageFlow:
         """Message should be consumed from Kafka."""
         consumer = kafka_mocks["consumer"]
         msg = MagicMock()
-        msg.value = json.dumps({"transaction_id": "TXN001", "amount": 500}).encode("utf-8")
+        msg.value = json.dumps({"transaction_id": "TXN001", "amount": 500}).encode(
+            "utf-8"
+        )
 
         consumer.poll = MagicMock(return_value={MagicMock(): msg})
 
@@ -189,9 +193,9 @@ class TestKafkaMessageFlow:
         # Simulate batch of 10 messages
         batch = [
             MagicMock(
-                value=json.dumps({"transaction_id": f"TXN{i:03d}", "amount": 500 + i * 100}).encode(
-                    "utf-8"
-                )
+                value=json.dumps(
+                    {"transaction_id": f"TXN{i:03d}", "amount": 500 + i * 100}
+                ).encode("utf-8")
             )
             for i in range(10)
         ]
@@ -252,13 +256,17 @@ class TestDataEnrichmentFlow:
     def test_velocity_detection(self):
         """Test velocity detection during enrichment."""
         # Simulate 6 transactions in 1 minute
-        transactions = [{"phone": "254712345678", "timestamp": 1000 + i} for i in range(6)]
+        transactions = [
+            {"phone": "254712345678", "timestamp": 1000 + i} for i in range(6)
+        ]
 
         # Velocity detection: count transactions in 60s window
         window_start = transactions[0]["timestamp"]
         window_end = window_start + 60
 
-        count = sum(1 for t in transactions if window_start <= t["timestamp"] <= window_end)
+        count = sum(
+            1 for t in transactions if window_start <= t["timestamp"] <= window_end
+        )
 
         velocity_flag = count > 5
 
@@ -314,7 +322,11 @@ class TestDatabasePersistence:
         cursor.execute(
             "INSERT INTO mpesa_transactions_raw (transaction_id, phone_number, amount) "
             "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-            (transaction["transaction_id"], transaction["phone"], transaction["amount"]),
+            (
+                transaction["transaction_id"],
+                transaction["phone"],
+                transaction["amount"],
+            ),
         )
 
         db_mock.commit()
@@ -377,7 +389,10 @@ class TestErrorRecovery:
         producer = MagicMock()
 
         # First call fails
-        producer.send.side_effect = [Exception("Connection refused"), None]  # Retry succeeds
+        producer.send.side_effect = [
+            Exception("Connection refused"),
+            None,
+        ]  # Retry succeeds
 
         # Should retry
         try:

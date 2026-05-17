@@ -430,7 +430,9 @@ class TestRetryLogic:
 
     def test_no_retry_on_permanent_error(self, handler):
         """Should not retry on permanent errors."""
-        handler.daraja_client.initiate_stk_push.side_effect = Exception("Invalid credentials")
+        handler.daraja_client.initiate_stk_push.side_effect = Exception(
+            "Invalid credentials"
+        )
 
         # Should raise immediately without retry
 
@@ -454,7 +456,9 @@ class TestTimeoutHandling:
 
     def test_handle_daraja_timeout(self, handler):
         """Should handle timeouts from Daraja API."""
-        handler.daraja_client.initiate_stk_push.side_effect = TimeoutError("Daraja timeout")
+        handler.daraja_client.initiate_stk_push.side_effect = TimeoutError(
+            "Daraja timeout"
+        )
 
         with pytest.raises(TimeoutError):
             handler.initiate_stk_push(

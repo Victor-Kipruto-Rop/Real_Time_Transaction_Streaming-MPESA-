@@ -15,16 +15,79 @@ import json
 import os
 import sys
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
+import anyio
+import httpx
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+class ASGITestClient:
+    """Small synchronous HTTP client for FastAPI tests.
+
+    Starlette's in-process TestClient can hang with some Python 3.12 dependency
+    combinations. This client still exercises the ASGI app in memory, but runs
+    each async request in a short-lived worker thread so async pytest tests can
+    call it synchronously.
+    """
+
+    def __init__(self, app):
+        self.app = app
+        self.base_url = "http://testserver"
+
+    async def _async_request(self, method: str, path: str, **kwargs):
+        transport = httpx.ASGITransport(app=self.app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url=self.base_url
+        ) as client:
+            return await client.request(method, path, **kwargs)
+
+    def request(self, method: str, path: str, **kwargs):
+        result = {}
+
+        def run_request():
+            try:
+
+                async def call_request():
+                    return await self._async_request(method, path, **kwargs)
+
+                result["response"] = anyio.run(call_request)
+            except Exception as exc:
+                result["error"] = exc
+
+        thread = threading.Thread(target=run_request)
+        thread.start()
+        thread.join(timeout=10)
+        if thread.is_alive():
+            raise TimeoutError(f"{method} {path} timed out")
+        if "error" in result:
+            raise result["error"]
+        return result["response"]
+
+    def get(self, path: str, **kwargs):
+        return self.request("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs):
+        return self.request("POST", path, **kwargs)
+
+    def close(self) -> None:
+        return None
+
+
+try:
+    import fastapi.testclient as fastapi_testclient
+
+    fastapi_testclient.TestClient = ASGITestClient
+except Exception:
+    pass
 
 # Import app components
 try:
@@ -214,7 +277,9 @@ def invalid_timestamp_payload() -> Dict[str, Any]:
 def mock_kafka_producer():
     """Create mock Kafka producer."""
     producer = MagicMock()
-    producer.send = MagicMock(return_value=MagicMock(get=MagicMock(return_value="success")))
+    producer.send = MagicMock(
+        return_value=MagicMock(get=MagicMock(return_value="success"))
+    )
     producer.flush = MagicMock()
     producer.close = MagicMock()
     return producer

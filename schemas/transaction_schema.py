@@ -28,7 +28,9 @@ def normalize_ke_phone(phone: str) -> str:
     if value.startswith("0"):
         value = "254" + value[1:]
     if not re.fullmatch(r"254\d{9}", value):
-        raise ValueError("Invalid Kenyan phone number (expected 254XXXXXXXXX or 07XXXXXXXX)")
+        raise ValueError(
+            "Invalid Kenyan phone number (expected 254XXXXXXXXX or 07XXXXXXXX)"
+        )
     return value
 
 

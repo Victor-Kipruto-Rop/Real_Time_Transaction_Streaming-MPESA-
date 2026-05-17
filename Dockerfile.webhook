@@ -5,8 +5,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-runtime.txt ./requirements-runtime.txt
+RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 COPY ingestion ./ingestion
 COPY schemas ./schemas
@@ -14,4 +14,3 @@ COPY schemas ./schemas
 EXPOSE 5000
 
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "ingestion.webhook_receiver:app"]
-

@@ -120,7 +120,9 @@ def run_consumer(config: ConsumerConfig, max_messages: Optional[int] = None) -> 
                 continue
 
             logger.info(
-                "Consumed event_type=%s transaction_id=%s", event.event_type, event.transaction_id
+                "Consumed event_type=%s transaction_id=%s",
+                event.event_type,
+                event.transaction_id,
             )
 
             if conn:

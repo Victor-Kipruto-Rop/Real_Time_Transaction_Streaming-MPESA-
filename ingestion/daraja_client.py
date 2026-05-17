@@ -78,15 +78,17 @@ class DarajaClient:
         else:
             self.base_url = "https://api.safaricom.co.ke"
 
-        self.access_token = None
-        self.token_expiry = None
+        self.access_token: Optional[str] = None
+        self.token_expiry: Optional[datetime] = None
         self._session = requests.Session()
 
     @classmethod
     def from_env(cls) -> "DarajaClient":
         environment = os.getenv("DARAJA_ENVIRONMENT", "sandbox").strip() or "sandbox"
         consumer_key = os.getenv("DARAJA_CONSUMER_KEY") or os.getenv("DARAJA_KEY")
-        consumer_secret = os.getenv("DARAJA_CONSUMER_SECRET") or os.getenv("DARAJA_SECRET")
+        consumer_secret = os.getenv("DARAJA_CONSUMER_SECRET") or os.getenv(
+            "DARAJA_SECRET"
+        )
         business_shortcode = os.getenv("MPESA_BUSINESS_SHORTCODE") or os.getenv(
             "BUSINESS_SHORTCODE"
         )
@@ -104,6 +106,10 @@ class DarajaClient:
         ]
         if missing:
             raise ValueError(f"Missing required Daraja env vars: {', '.join(missing)}")
+
+        assert consumer_key is not None
+        assert consumer_secret is not None
+        assert business_shortcode is not None
 
         return cls(
             consumer_key=consumer_key,
@@ -125,7 +131,11 @@ class DarajaClient:
             Exception: If token retrieval fails
         """
         # Check if token is still valid
-        if self.access_token and self.token_expiry and datetime.now() < self.token_expiry:
+        if (
+            self.access_token
+            and self.token_expiry
+            and datetime.now() < self.token_expiry
+        ):
             return self.access_token
 
         url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
@@ -137,10 +147,15 @@ class DarajaClient:
             response.raise_for_status()
 
             data = response.json()
-            self.access_token = data.get("access_token")
+            access_token = data.get("access_token")
+            if not isinstance(access_token, str) or not access_token:
+                raise ValueError("Daraja OAuth response did not include access_token")
+            self.access_token = access_token
             expires_in = int(data.get("expires_in") or 3600)
             # Refresh a bit early.
-            self.token_expiry = datetime.now() + timedelta(seconds=max(expires_in - 300, 60))
+            self.token_expiry = datetime.now() + timedelta(
+                seconds=max(expires_in - 300, 60)
+            )
 
             logger.info("Access token obtained successfully")
             return self.access_token
@@ -151,7 +166,9 @@ class DarajaClient:
 
     def _stk_password(self, timestamp: str) -> str:
         if not self.passkey:
-            raise ValueError("MPESA_PASSKEY is required for STK push password generation")
+            raise ValueError(
+                "MPESA_PASSKEY is required for STK push password generation"
+            )
         raw = f"{self.business_shortcode}{self.passkey}{timestamp}".encode("utf-8")
         return base64.b64encode(raw).decode("utf-8")
 
@@ -177,7 +194,9 @@ class DarajaClient:
         validation_url = validation_url or os.getenv("C2B_VALIDATION_URL")
         confirmation_url = confirmation_url or os.getenv("C2B_CONFIRMATION_URL")
         if not validation_url or not confirmation_url:
-            raise ValueError("validation_url and confirmation_url are required (or set env vars)")
+            raise ValueError(
+                "validation_url and confirmation_url are required (or set env vars)"
+            )
 
         url = f"{self.base_url}/mpesa/c2b/v1/registerurl"
 
@@ -188,10 +207,15 @@ class DarajaClient:
             "ValidationURL": validation_url,
         }
 
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
         try:
-            response = self._session.post(url, json=payload, headers=headers, timeout=10)
+            response = self._session.post(
+                url, json=payload, headers=headers, timeout=10
+            )
             response.raise_for_status()
             logger.info("C2B URLs registered successfully")
             return response.json()
@@ -247,10 +271,15 @@ class DarajaClient:
             "TransactionDesc": description,
         }
 
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
         try:
-            response = self._session.post(url, json=payload, headers=headers, timeout=10)
+            response = self._session.post(
+                url, json=payload, headers=headers, timeout=10
+            )
             response.raise_for_status()
             logger.info(f"STK push initiated for {phone_number}")
             return response.json()

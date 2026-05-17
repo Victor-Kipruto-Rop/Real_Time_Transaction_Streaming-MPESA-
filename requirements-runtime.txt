@@ -1,0 +1,8 @@
+flask==3.0.0
+gunicorn==21.2.0
+pydantic==2.5.0
+psycopg2-binary==2.9.9
+confluent-kafka==2.3.0
+python-json-logger==2.0.7
+python-dotenv==1.0.0
+requests==2.31.0

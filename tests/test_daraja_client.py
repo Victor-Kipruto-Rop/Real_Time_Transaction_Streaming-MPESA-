@@ -425,7 +425,10 @@ class TestClientIntegration:
         # Mock token response
         token_resp = MagicMock()
         token_resp.raise_for_status.return_value = None
-        token_resp.json.return_value = {"access_token": "test_token", "expires_in": 3600}
+        token_resp.json.return_value = {
+            "access_token": "test_token",
+            "expires_in": 3600,
+        }
 
         # Mock STK push response
         stk_resp = MagicMock()

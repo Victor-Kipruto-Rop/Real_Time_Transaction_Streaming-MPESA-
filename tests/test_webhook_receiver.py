@@ -14,10 +14,14 @@ import pytest
 class TestC2BValidationRoute:
     """Tests for C2B validation webhook endpoint."""
 
-    def test_valid_c2b_validation_returns_success(self, flask_test_client, c2b_validation_payload):
+    def test_valid_c2b_validation_returns_success(
+        self, flask_test_client, c2b_validation_payload
+    ):
         """Valid C2B validation payload should return success response."""
         response = flask_test_client.post(
-            "/webhook/c2b/validation", json=c2b_validation_payload, content_type="application/json"
+            "/webhook/c2b/validation",
+            json=c2b_validation_payload,
+            content_type="application/json",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -36,21 +40,31 @@ class TestC2BValidationRoute:
         # Should return 400 or 200 with error ResultCode
         assert response.status_code in [200, 400]
 
-    def test_invalid_phone_number_in_validation(self, flask_test_client, invalid_phone_payload):
+    def test_invalid_phone_number_in_validation(
+        self, flask_test_client, invalid_phone_payload
+    ):
         """Invalid phone number format should be rejected."""
         response = flask_test_client.post(
-            "/webhook/c2b/validation", json=invalid_phone_payload, content_type="application/json"
+            "/webhook/c2b/validation",
+            json=invalid_phone_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 400, 422]
 
-    def test_invalid_amount_in_validation(self, flask_test_client, invalid_amount_payload):
+    def test_invalid_amount_in_validation(
+        self, flask_test_client, invalid_amount_payload
+    ):
         """Amount exceeding limit should be rejected."""
         response = flask_test_client.post(
-            "/webhook/c2b/validation", json=invalid_amount_payload, content_type="application/json"
+            "/webhook/c2b/validation",
+            json=invalid_amount_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 400, 422]
 
-    def test_invalid_timestamp_format(self, flask_test_client, invalid_timestamp_payload):
+    def test_invalid_timestamp_format(
+        self, flask_test_client, invalid_timestamp_payload
+    ):
         """Invalid timestamp format should be rejected."""
         response = flask_test_client.post(
             "/webhook/c2b/validation",
@@ -69,7 +83,9 @@ class TestC2BValidationRoute:
     def test_malformed_json_returns_error(self, flask_test_client):
         """Malformed JSON should return error."""
         response = flask_test_client.post(
-            "/webhook/c2b/validation", data="{invalid json}", content_type="application/json"
+            "/webhook/c2b/validation",
+            data="{invalid json}",
+            content_type="application/json",
         )
         assert response.status_code == 400
 
@@ -82,7 +98,9 @@ class TestC2BValidationRoute:
         mock_producer_class.return_value = mock_producer
 
         response = flask_test_client.post(
-            "/webhook/c2b/validation", json=c2b_validation_payload, content_type="application/json"
+            "/webhook/c2b/validation",
+            json=c2b_validation_payload,
+            content_type="application/json",
         )
 
         assert response.status_code == 200
@@ -137,7 +155,9 @@ class TestC2BConfirmationRoute:
         }
 
         response = flask_test_client.post(
-            "/webhook/c2b/confirmation", json=incomplete_payload, content_type="application/json"
+            "/webhook/c2b/confirmation",
+            json=incomplete_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 400, 422]
 
@@ -161,19 +181,27 @@ class TestC2BConfirmationRoute:
 class TestB2CResultRoute:
     """Tests for B2C result webhook endpoint."""
 
-    def test_valid_b2c_result_returns_success(self, flask_test_client, b2c_result_payload):
+    def test_valid_b2c_result_returns_success(
+        self, flask_test_client, b2c_result_payload
+    ):
         """Valid B2C result should be accepted."""
         response = flask_test_client.post(
-            "/webhook/b2c/result", json=b2c_result_payload, content_type="application/json"
+            "/webhook/b2c/result",
+            json=b2c_result_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 201, 204]
 
-    def test_b2c_result_with_failed_result_code(self, flask_test_client, b2c_result_payload):
+    def test_b2c_result_with_failed_result_code(
+        self, flask_test_client, b2c_result_payload
+    ):
         """B2C result with failure code should still be accepted."""
         b2c_result_payload["ResultCode"] = 1  # Failed
 
         response = flask_test_client.post(
-            "/webhook/b2c/result", json=b2c_result_payload, content_type="application/json"
+            "/webhook/b2c/result",
+            json=b2c_result_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 201, 204]
 
@@ -185,7 +213,9 @@ class TestB2CResultRoute:
         }
 
         response = flask_test_client.post(
-            "/webhook/b2c/result", json=incomplete_payload, content_type="application/json"
+            "/webhook/b2c/result",
+            json=incomplete_payload,
+            content_type="application/json",
         )
         assert response.status_code in [200, 400, 422]
 
@@ -224,7 +254,9 @@ class TestUIRoute:
 
 
 class TestRateLimiting:
-    def test_rate_limit_triggers_429_when_configured(self, monkeypatch, c2b_confirmation_payload):
+    def test_rate_limit_triggers_429_when_configured(
+        self, monkeypatch, c2b_confirmation_payload
+    ):
         import ingestion.webhook_receiver as wr
 
         monkeypatch.setenv("RATE_LIMIT_PER_MIN", "1")
@@ -234,11 +266,15 @@ class TestRateLimiting:
         client = app.test_client()
 
         first = client.post(
-            "/webhook/c2b/confirmation", json=c2b_confirmation_payload, content_type="application/json"
+            "/webhook/c2b/confirmation",
+            json=c2b_confirmation_payload,
+            content_type="application/json",
         )
         assert first.status_code in [200, 201, 204]
         second = client.post(
-            "/webhook/c2b/confirmation", json=c2b_confirmation_payload, content_type="application/json"
+            "/webhook/c2b/confirmation",
+            json=c2b_confirmation_payload,
+            content_type="application/json",
         )
         assert second.status_code == 429
 
@@ -251,7 +287,9 @@ class TestErrorHandling:
         # This would require mocking service calls to timeout
         pass
 
-    def test_database_connection_error_handling(self, flask_test_client, c2b_validation_payload):
+    def test_database_connection_error_handling(
+        self, flask_test_client, c2b_validation_payload
+    ):
         """Database connection errors should be handled gracefully."""
         with patch("ingestion.webhook_receiver.db_connection") as mock_db:
             mock_db.side_effect = Exception("Connection refused")
@@ -265,10 +303,14 @@ class TestErrorHandling:
             # Should either return error response or fall back gracefully
             assert response.status_code in [200, 500, 503]
 
-    def test_kafka_producer_error_handling(self, flask_test_client, c2b_validation_payload):
+    def test_kafka_producer_error_handling(
+        self, flask_test_client, c2b_validation_payload
+    ):
         """Kafka producer errors should not crash webhook."""
         with patch("ingestion.kafka_producer.MpesaKafkaProducer") as mock_producer:
-            mock_producer.return_value.send.side_effect = Exception("Broker unavailable")
+            mock_producer.return_value.send.side_effect = Exception(
+                "Broker unavailable"
+            )
 
             response = flask_test_client.post(
                 "/webhook/c2b/validation",
@@ -283,7 +325,9 @@ class TestErrorHandling:
 class TestConcurrency:
     """Tests for concurrent request handling."""
 
-    def test_multiple_concurrent_validations(self, flask_test_client, c2b_validation_payload):
+    def test_multiple_concurrent_validations(
+        self, flask_test_client, c2b_validation_payload
+    ):
         """Service should handle multiple concurrent requests."""
         # Send multiple requests in sequence (simulating concurrency)
         responses = []

@@ -8,6 +8,7 @@ and monitoring systems.
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,10 @@ except ImportError:
 
             return NoOpTimer()
 
-    Counter = _NoOpMetric
-    Gauge = _NoOpMetric
-    Histogram = _NoOpMetric
-    Summary = _NoOpMetric
+    Counter = _NoOpMetric  # type: ignore[misc,assignment]
+    Gauge = _NoOpMetric  # type: ignore[misc,assignment]
+    Histogram = _NoOpMetric  # type: ignore[misc,assignment]
+    Summary = _NoOpMetric  # type: ignore[misc,assignment]
 
 
 class MetricsCollector:
@@ -239,12 +240,16 @@ class MetricsCollector:
         self.database_operations.labels(operation=operation, status=status).inc()
         self.database_operation_time.labels(operation=operation).observe(duration)
 
-    def record_webhook_request(self, endpoint: str, status_code: int, duration: float) -> None:
+    def record_webhook_request(
+        self, endpoint: str, status_code: int, duration: float
+    ) -> None:
         """Record webhook request."""
         self.webhook_requests.labels(endpoint=endpoint, status_code=status_code).inc()
         self.webhook_latency.observe(duration)
 
-    def record_daraja_api_call(self, endpoint: str, status: str, duration: float) -> None:
+    def record_daraja_api_call(
+        self, endpoint: str, status: str, duration: float
+    ) -> None:
         """Record Daraja API call."""
         self.daraja_api_calls.labels(endpoint=endpoint, status=status).inc()
         self.daraja_api_latency.observe(duration)
@@ -273,11 +278,15 @@ class MetricsCollector:
         """Set data freshness age."""
         self.data_freshness_age_seconds.set(age_seconds)
 
-    def set_unique_customers_count(self, count: int, time_window: str = "hourly") -> None:
+    def set_unique_customers_count(
+        self, count: int, time_window: str = "hourly"
+    ) -> None:
         """Set unique customers count."""
         self.unique_customers_gauge.labels(time_window=time_window).set(count)
 
-    def set_transaction_amount_sum(self, amount_sum: float, time_window: str = "hourly") -> None:
+    def set_transaction_amount_sum(
+        self, amount_sum: float, time_window: str = "hourly"
+    ) -> None:
         """Set transaction amount sum."""
         self.transaction_amount_sum.labels(time_window=time_window).set(amount_sum)
 
@@ -291,11 +300,15 @@ class MetricsCollector:
             return b"Prometheus client not installed"
 
 
+_metrics_collector: Optional[MetricsCollector] = None
+
+
 def get_metrics_collector() -> MetricsCollector:
     """Get singleton metrics collector instance."""
-    if not hasattr(get_metrics_collector, "_instance"):
-        get_metrics_collector._instance = MetricsCollector()
-    return get_metrics_collector._instance
+    global _metrics_collector
+    if _metrics_collector is None:
+        _metrics_collector = MetricsCollector()
+    return _metrics_collector
 
 
 if __name__ == "__main__":

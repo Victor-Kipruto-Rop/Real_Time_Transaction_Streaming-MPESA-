@@ -1,3 +1,5 @@
+name: 01_real_time_transaction_streaming
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -72,10 +74,10 @@ services:
       MPESA_BUSINESS_SHORTCODE: ${MPESA_BUSINESS_SHORTCODE:-}
       MPESA_PASSKEY: ${MPESA_PASSKEY:-}
       CALLBACK_URL: ${CALLBACK_URL:-}
-      KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:29092}
+      KAFKA_BROKERS: kafka:29092
       KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-mpesa-transactions}
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -97,11 +99,11 @@ services:
     container_name: mpesa_kafka_consumer
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:29092}
+      KAFKA_BROKERS: kafka:29092
       KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-mpesa-transactions}
       KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-mpesa_streaming_group}
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
