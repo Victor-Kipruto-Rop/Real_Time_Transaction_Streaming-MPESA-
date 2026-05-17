@@ -1,6 +1,8 @@
-# M-Pesa Real-Time Transaction Streaming Pipeline
+<p align="center">
+  <img src="./a_high_resolution_infographic_diagram_poster_for_a.png" alt="M-Pesa Real-Time Streaming Pipeline" width="100%">
+</p>
 
-![M-Pesa Real-Time Streaming Pipeline](a_high_resolution_infographic_diagram_poster_for_a.png)
+# M-Pesa Real-Time Transaction Streaming Pipeline
 
 ## Difficulty: Intermediate → Advanced  
 ## Impact: High  
@@ -48,150 +50,43 @@ Grafana / Streamlit Dashboard
 
 ---
 
-# Key Features
-
-- Real-time M-Pesa transaction streaming
-- Kafka-based event-driven architecture
-- Scalable transaction processing pipeline
-- Data validation using Pydantic schemas
-- Transaction enrichment and transformations
-- Analytics-ready warehouse tables
-- Dockerized local development setup
-- Monitoring and observability support
-- dbt data quality testing
-- Dashboard visualization for insights
-
----
-
 # Technologies Used
 
-| Category | Tools |
-|---|---|
-| Programming | Python |
-| Streaming | Apache Kafka |
-| Stream Processing | Apache Flink |
-| Database | PostgreSQL / BigQuery |
-| Data Transformation | dbt |
-| Monitoring | Grafana |
-| Containerization | Docker |
-| Workflow Orchestration | Apache Airflow |
-| API Integration | Safaricom Daraja API |
-
----
-
-# Kenyan Data Sources
-
-## Safaricom Daraja API
-
-This project integrates with:
-
-- C2B Validation API
-- C2B Confirmation API
-- B2C Result API
-- STK Push Callback API
-
-These APIs simulate real mobile money payment workflows used across Kenya.
-
----
-
-# Project Structure
-
-```bash
-mpesa-streaming-pipeline/
-│
-├── .env
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── docker-compose.yml
-├── Makefile
-│
-├── ingestion/
-│   ├── __init__.py
-│   ├── daraja_client.py
-│   ├── stk_push.py
-│   ├── webhook_receiver.py
-│   └── kafka_producer.py
-│
-├── streaming/
-│   ├── kafka_consumer.py
-│   └── flink_job.py
-│
-├── schemas/
-│   └── transaction_schema.py
-│
-├── dbt/
-│   └── models/
-│       ├── staging/
-│       │   └── stg_mpesa_raw.sql
-│       │
-│       └── marts/
-│           ├── mart_hourly_volumes.sql
-│           └── mart_county_heatmap.sql
-│
-├── dags/
-│   └── mpesa_batch_dag.py
-│
-├── tests/
-├── notebooks/
-└── docs/
-```
+- Python
+- Apache Kafka
+- Apache Flink
+- PostgreSQL
+- Google BigQuery
+- dbt
+- Grafana
+- Docker
+- Airflow
+- Safaricom Daraja API
 
 ---
 
 # Quick Start
 
-## 1. Clone Repository
+## Clone Repository
 
 ```bash
 git clone https://github.com/kipruto45/mpesa_safaricom-pipeline-.git
 cd mpesa_safaricom-pipeline-
 ```
 
-## 2. Configure Environment Variables
-
-Copy:
-
-```bash
-.env.example
-```
-
-to:
-
-```bash
-.env
-```
-
-Add your credentials.
-
----
-
-## 3. Start Services
+## Start Services
 
 ```bash
 make docker-up
 ```
 
-This starts:
-
-- Kafka
-- ZooKeeper
-- PostgreSQL
-- Redis
-- Airflow
-- Webhook Receiver
-
----
-
-## 4. Health Check
+## Health Check
 
 ```bash
 curl -s http://localhost:5000/health | python -m json.tool
 ```
 
----
-
-## 5. Send Sample Transaction
+## Send Sample Transaction
 
 ```bash
 curl -s -X POST http://localhost:5000/webhook/c2b/confirmation \
@@ -201,71 +96,20 @@ curl -s -X POST http://localhost:5000/webhook/c2b/confirmation \
 
 ---
 
-# dbt Transformations
+# Verified Features
 
-Run transformations:
-
-```bash
-dbt run --project-dir dbt --profiles-dir dbt
-```
-
-Run tests:
-
-```bash
-dbt test --project-dir dbt --profiles-dir dbt
-```
-
----
-
-# Verified Working Features
-
-- Kafka streaming
+- Real-time Kafka streaming
 - Webhook ingestion
 - PostgreSQL insertion
-- dbt model execution
-- End-to-end local data flow
-- Dockerized services
-- Automated tests
-
----
-
-# Analytics Dashboard Features
-
-- Transaction volume tracking
-- Peak transaction hour analysis
-- County transaction heatmaps
-- Merchant analytics
-- Real-time monitoring
-- Data quality checks
-
----
-
-# Future Improvements
-
-- Google Cloud deployment
-- Kubernetes support
-- Spark Streaming integration
-- ML-based fraud detection
-- CI/CD pipelines
-- Prometheus monitoring
-- Grafana dashboards
-
----
-
-# Educational Purpose
-
-This project is intended for:
-
-- Learning real-time data engineering
-- Demonstrating Kafka streaming concepts
-- Understanding financial transaction systems
-- Building production-style portfolio projects
+- dbt transformations
+- Dockerized infrastructure
+- Automated testing
+- Analytics-ready data models
 
 ---
 
 # Author
 
-## Victor Kipruto
+Victor Kipruto
 
-- GitHub: https://github.com/kipruto45
-- Project Repository: https://github.com/kipruto45/mpesa_safaricom-pipeline-
+GitHub: https://github.com/kipruto45
