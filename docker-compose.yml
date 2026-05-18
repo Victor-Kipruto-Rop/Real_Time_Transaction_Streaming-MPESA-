@@ -59,6 +59,30 @@ services:
       timeout: 5s
       retries: 5
 
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-latest}
+    container_name: mpesa_grafana
+    ports:
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+      GF_USERS_DEFAULT_THEME: dark
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/executive_command_center.json
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
   webhook-receiver:
     build:
       context: .
@@ -146,6 +170,7 @@ services:
 
 volumes:
   postgres_data:
+  grafana_data:
 
 networks:
   default:

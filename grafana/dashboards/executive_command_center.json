@@ -1,0 +1,521 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Board-level value, adoption, and growth indicators for the M-Pesa streaming pipeline.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "unit": "currency:KES"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(sum(transaction_amount), 0) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_date = current_date\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Value Today",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_date = current_date\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Transactions Today",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(distinct customer_phone_number) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_date = current_date\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Customers Today",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "unit": "currency:KES"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(avg(transaction_amount), 0) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_date = current_date\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Ticket Today",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select\n                  hour_bucket as time,\n                  sum(total_amount) as value_kes,\n                  sum(transaction_count) as transactions\n                from public_marts.mart_hourly_volumes h\n                left join public_staging.stg_c2b_transactions s\n                  on date_trunc('hour', s.transaction_timestamp) = h.hour_bucket\n                where $__timeFilter(hour_bucket)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Value and Transactions by Hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select amount_category as band, sum(transaction_amount) as value\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 2 desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Value Mix by Amount Band",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select\n                  coalesce(account_reference, 'Unassigned') as account_reference,\n                  sum(transaction_count) as transactions,\n                  sum(total_amount) as value_kes,\n                  round(avg(total_amount / nullif(transaction_count, 0)), 2) as avg_ticket\n                from public_marts.mart_county_heatmap\n                where transaction_date >= current_date - interval '7 days'\n                group by 1\n                order by value_kes desc\n                limit 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Account References",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "unit": "currency:KES"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 8,
+      "options": {
+        "barWidth": 0.78,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select\n                  transaction_date::text as day,\n                  sum(total_transaction_value) as value_kes\n                from public_marts.mart_daily_transactions\n                where transaction_date >= current_date - interval '14 days'\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily Value Trend",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "mpesa",
+    "executive",
+    "revenue"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "mpesa-postgres"
+        },
+        "definition": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Account Reference",
+        "multi": true,
+        "name": "account_reference",
+        "options": [],
+        "query": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "M-Pesa Executive Command Center",
+  "uid": "mpesa-executive-command",
+  "version": 1,
+  "weekStart": "monday"
+}

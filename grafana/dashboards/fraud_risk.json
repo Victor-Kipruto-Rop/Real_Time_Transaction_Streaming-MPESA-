@@ -1,0 +1,461 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Fraud analyst view for high-value, unusual-hour, and velocity-based risk events.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_timestamp >= now() - interval '24 hours'\n                  and transaction_amount >= 100000\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Critical Value Events",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_timestamp >= now() - interval '24 hours'\n                  and (transaction_hour < 6 or transaction_hour >= 22)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Night Transactions",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value\n                from (\n                  select customer_phone_number\n                  from public_staging.stg_c2b_transactions\n                  where transaction_timestamp >= now() - interval '1 hour'\n                  \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                  group by customer_phone_number\n                  having count(*) >= 5\n                ) v",
+          "refId": "A"
+        }
+      ],
+      "title": "High Velocity Customers",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "unit": "currency:KES"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(sum(transaction_amount), 0) as value\n                from public_staging.stg_c2b_transactions\n                where transaction_timestamp >= now() - interval '24 hours'\n                  and (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ) <> 'normal'\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Risk Exposure",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select \n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n         as risk_bucket, count(*) as events\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 2 desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Risk Event Mix",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select\n                  date_trunc('hour', transaction_timestamp) as time,\n                  count(*) filter (where (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ) = 'critical') as critical,\n                  count(*) filter (where (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ) = 'elevated') as elevated,\n                  count(*) filter (where (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ) = 'velocity') as velocity\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Risk Events Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select\n                  customer_phone_number,\n                  count(*) as events,\n                  sum(transaction_amount) as value_kes,\n                  max(transaction_amount) as largest_transaction,\n                  max(transaction_timestamp) as latest_seen,\n                  string_agg(distinct (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ), ', ' order by (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        )) as risk_reasons\n                from public_staging.stg_c2b_transactions\n                where transaction_timestamp >= now() - interval '7 days'\n                  and (\n        case\n          when transaction_amount >= 100000 then 'critical'\n          when transaction_hour < 6 or transaction_hour >= 22 then 'elevated'\n          when transaction_sequence_per_customer >= 10 then 'velocity'\n          else 'normal'\n        end\n        ) <> 'normal'\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by value_kes desc\n                limit 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Customers Requiring Review",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "mpesa",
+    "fraud",
+    "risk"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "mpesa-postgres"
+        },
+        "definition": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Account Reference",
+        "multi": true,
+        "name": "account_reference",
+        "options": [],
+        "query": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "M-Pesa Fraud and Risk Monitoring",
+  "uid": "mpesa-fraud-risk",
+  "version": 1,
+  "weekStart": "monday"
+}

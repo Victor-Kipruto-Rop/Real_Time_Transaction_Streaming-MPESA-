@@ -1,0 +1,463 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Customer value, repeat usage, timing, and account-reference intelligence.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(distinct customer_phone_number) as value\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Customers in Window",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 1,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "with customer_counts as (\n                  select customer_phone_number, count(*) as txns\n                  from public_staging.stg_c2b_transactions\n                  where $__timeFilter(transaction_timestamp)\n                  \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                  group by 1\n                )\n                select coalesce(100.0 * count(*) filter (where txns > 1) / nullif(count(*), 0), 0) as value\n                from customer_counts",
+          "refId": "A"
+        }
+      ],
+      "title": "Repeat Customer Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 0,
+          "unit": "currency:KES"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "with customer_value as (\n                  select customer_phone_number, sum(transaction_amount) as value_kes\n                  from public_staging.stg_c2b_transactions\n                  where $__timeFilter(transaction_timestamp)\n                  \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                  group by 1\n                )\n                select coalesce(percentile_cont(0.5) within group (order by value_kes), 0) as value\n                from customer_value",
+          "refId": "A"
+        }
+      ],
+      "title": "Median Customer Value",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 1,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "with customer_value as (\n                  select customer_phone_number, sum(transaction_amount) as value_kes\n                  from public_staging.stg_c2b_transactions\n                  where $__timeFilter(transaction_timestamp)\n                  \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                  group by 1\n                )\n                select coalesce(100.0 * max(value_kes) / nullif(sum(value_kes), 0), 0) as value\n                from customer_value",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Customer Share",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "barWidth": 0.78,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select\n                  case\n                    when transaction_hour >= 6 and transaction_hour < 12 then 'Morning'\n                    when transaction_hour >= 12 and transaction_hour < 18 then 'Afternoon'\n                    else 'Evening/Night'\n                  end as period,\n                  count(*) as transactions\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by 2 desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Transaction Timing Pattern",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "with customer_value as (\n                  select customer_phone_number, sum(transaction_amount) as value_kes\n                  from public_staging.stg_c2b_transactions\n                  where $__timeFilter(transaction_timestamp)\n                  \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                  group by 1\n                )\n                select\n                  case\n                    when value_kes >= 100000 then 'Enterprise'\n                    when value_kes >= 25000 then 'High Value'\n                    when value_kes >= 5000 then 'Core'\n                    else 'Long Tail'\n                  end as value_band,\n                  count(*) as customers\n                from customer_value\n                group by 1\n                order by 2 desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Customer Value Bands",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mpesa-postgres"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mpesa-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select\n                  customer_phone_number,\n                  count(*) as transactions,\n                  sum(transaction_amount) as value_kes,\n                  round(avg(transaction_amount), 2) as avg_ticket,\n                  max(transaction_timestamp) as latest_transaction\n                from public_staging.stg_c2b_transactions\n                where $__timeFilter(transaction_timestamp)\n                \nand (\n  '$account_reference' = '$__all'\n  or coalesce(account_reference, 'Unassigned') in (${account_reference:sqlstring})\n)\n\n                group by 1\n                order by value_kes desc\n                limit 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Customers by Value",
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "mpesa",
+    "customers",
+    "merchant-intelligence"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "mpesa-postgres"
+        },
+        "definition": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Account Reference",
+        "multi": true,
+        "name": "account_reference",
+        "options": [],
+        "query": "select distinct coalesce(account_reference, 'Unassigned') from public_staging.stg_c2b_transactions order by 1",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "M-Pesa Customer and Merchant Intelligence",
+  "uid": "mpesa-customer-intelligence",
+  "version": 1,
+  "weekStart": "monday"
+}

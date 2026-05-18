@@ -1,7 +1,7 @@
 # M-Pesa Analytics Platform - Comprehensive Makefile
 # Complete automation for development and production
 
-.PHONY: help setup verify clean test run-all
+.PHONY: help setup verify clean test run-all dashboards dashboards-check grafana-up
 .DEFAULT_GOAL := help
 
 # Colors
@@ -29,13 +29,28 @@ help:
 	@echo ""
 	@echo "$(GREEN)Setup:$(NC)"
 	@echo "  make setup              - Setup virtual environment and dependencies"
+	@echo "  make rds-setup          - Setup AWS RDS IAM authentication (.env)"
 	@echo "  make verify             - Verify all components working"
 	@echo "  make test-api           - Test Daraja API credentials"
+	@echo ""
+	@echo "$(GREEN)AWS RDS Connection:$(NC)"
+	@echo "  make rds-test           - Test RDS IAM authentication"
+	@echo "  make rds-demo           - Run RDS connection demo"
+	@echo "  make test-rds           - Run RDS unit tests"
+	@echo "  make test-rds-cov       - Run RDS tests with coverage"
+	@echo ""
+	@echo "$(GREEN)Database Optimization:$(NC)"
+	@echo "  make db-optimize        - Show optimization options"
+	@echo "  make test-db-optimize   - Run optimization tests"
+	@echo "  make test-db-optimize-cov - Run with coverage"
+	@echo "  make db-health          - Check database health"
+	@echo "  make db-indexes         - Create recommended indexes"
 	@echo ""
 	@echo "$(GREEN)Infrastructure:$(NC)"
 	@echo "  make infra-up           - Start Docker services"
 	@echo "  make infra-down         - Stop Docker services"
 	@echo "  make grafana-up         - Start Grafana (port 3000)"
+	@echo "  make dashboards-check   - Validate generated Grafana dashboards"
 	@echo ""
 	@echo "$(GREEN)Data Processing:$(NC)"
 	@echo "  make ingest             - Start Kafka consumer"
@@ -109,12 +124,10 @@ infra-down:
 
 grafana-up:
 	@echo "$(BLUE)Starting Grafana...$(NC)"
-	@docker run -d --name mpesa_grafana --network mpesa_network \
-		-p 3000:3000 \
-		-e "GF_SECURITY_ADMIN_PASSWORD=admin123" \
-		grafana/grafana:latest 2>/dev/null || true
+	@$(MAKE) dashboards
+	@$(DOCKER_COMPOSE) up -d grafana
 	@echo "$(GREEN)✓ Grafana running at http://localhost:3000$(NC)"
-	@echo "   Username: admin, Password: admin123"
+	@echo "   Username: $${GRAFANA_ADMIN_USER:-admin}, Password: $${GRAFANA_ADMIN_PASSWORD:-admin123}"
 
 # ============================================================================
 # DATA PROCESSING
@@ -147,6 +160,11 @@ dashboards:
 	@echo "$(BLUE)Generating dashboards...$(NC)"
 	@$(VENV_PYTHON) dashboards/grafana_dashboards.py
 	@echo "$(GREEN)✓ Dashboards generated$(NC)"
+
+dashboards-check:
+	@echo "$(BLUE)Validating dashboards...$(NC)"
+	@$(VENV_PYTHON) dashboards/grafana_dashboards.py --check
+	@echo "$(GREEN)✓ Dashboards valid$(NC)"
 
 # ============================================================================
 # DATABASE
@@ -213,6 +231,67 @@ type-check:
 coverage:
 	@echo "$(BLUE)Running coverage...$(NC)"
 	@$(VENV_PYTHON) -m pytest tests/ --cov=ingestion --cov=streaming --cov=schemas --cov=app --cov-report=term-missing
+
+# ============================================================================
+# AWS RDS IAM AUTHENTICATION
+# ============================================================================
+
+rds-setup:
+	@echo "$(BLUE)Setting up AWS RDS IAM authentication...$(NC)"
+	@if [ ! -f ".env" ]; then \
+		echo "Creating .env from .env.example..."; \
+		cp .env.example .env; \
+		echo "$(YELLOW)⚠ Please edit .env with your RDS credentials$(NC)"; \
+	else \
+		echo "$(GREEN).env already exists$(NC)"; \
+	fi
+
+rds-test:
+	@echo "$(BLUE)Testing RDS IAM authentication connection...$(NC)"
+	@$(VENV_PYTHON) -m ingestion.rds_connection
+
+rds-demo:
+	@echo "$(BLUE)Running RDS connection demonstration...$(NC)"
+	@$(VENV_PYTHON) scripts/demo_rds_connection.py
+
+test-rds:
+	@echo "$(BLUE)Running RDS connection unit tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_rds_connection.py -v --tb=short
+
+test-rds-cov:
+	@echo "$(BLUE)Running RDS tests with coverage...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_rds_connection.py --cov=ingestion.rds_connection --cov-report=term-missing
+
+# ============================================================================
+# DATABASE OPTIMIZATION
+# ============================================================================
+
+db-optimize:
+	@echo "$(BLUE)Setting up database optimization...$(NC)"
+	@echo "Available optimizations:"
+	@echo "  - Connection pooling (db_pool.py)"
+	@echo "  - Query optimization (db_queries.py)"
+	@echo "  - Query result caching (db_cache.py)"
+	@echo "  - Index creation and monitoring"
+	@echo ""
+	@echo "Run 'make test-db-optimize' to test all optimizations"
+
+test-db-optimize:
+	@echo "$(BLUE)Running database optimization tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_db_optimization.py -v --tb=short
+
+test-db-optimize-cov:
+	@echo "$(BLUE)Running database optimization tests with coverage...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_db_optimization.py --cov=ingestion.db_pool --cov=ingestion.db_queries --cov=ingestion.db_cache --cov-report=term-missing
+
+db-health:
+	@echo "$(BLUE)Checking database health...$(NC)"
+	@$(VENV_PYTHON) -c "from ingestion.db_queries import DatabaseQueries; print('✓ Database healthy' if DatabaseQueries.health_check() else '✗ Database unhealthy')"
+
+db-indexes:
+	@echo "$(BLUE)Creating recommended database indexes...$(NC)"
+	@$(VENV_PYTHON) -c "from ingestion.db_queries import IndexRecommendations; IndexRecommendations.create_recommended_indexes()"
+	@echo "$(GREEN)✓ Indexes created$(NC)"
 
 # ============================================================================
 # PRODUCTION & SECURITY

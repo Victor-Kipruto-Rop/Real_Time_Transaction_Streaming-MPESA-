@@ -7,6 +7,7 @@ pydantic-settings==2.1.0
 
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
+boto3==1.43.9
 alembic==1.12.1
 pg8000==1.30.5
 
