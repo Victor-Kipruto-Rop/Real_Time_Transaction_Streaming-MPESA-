@@ -6,6 +6,7 @@ Complete implementation for M-Pesa C2B, STK Push, B2C, and other APIs
 import httpx
 import logging
 import base64
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import asyncio
@@ -33,7 +34,7 @@ class DarajaService:
 
     ENDPOINTS = {
         "oauth": "/oauth/v1/generate",
-        "c2b_register": "/mpesa/c2bregister/v1/registerurl",
+        "c2b_register": "/mpesa/c2b/v1/registerurl",
         "c2b_simulate": "/mpesa/c2bsimulate/v1/simulate",
         "stk_push": "/mpesa/stkpush/v1/processrequest",
         "stk_query": "/mpesa/stkpushquery/v1/query",
@@ -214,7 +215,10 @@ class DarajaService:
                         "PartyA": phone_number,
                         "PartyB": self.business_shortcode,
                         "PhoneNumber": phone_number,
-                        "CallBackURL": f"https://{settings.DOMAIN}/api/v1/webhooks/stk/callback",
+                        "CallBackURL": os.getenv(
+                            "CALLBACK_URL",
+                            f"https://{settings.DOMAIN}/api/v1/webhooks/stk/callback",
+                        ),
                         "AccountReference": account_reference,
                         "TransactionDesc": f"Payment for {account_reference}",
                     },

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
@@ -267,6 +268,29 @@ class TestC2BRegistration:
             assert result is not None
             assert result.get("ResponseCode") == "0"
 
+    def test_c2b_simulate_success(self, daraja_client):
+        """Should submit C2B simulation payload to Daraja sandbox endpoint."""
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {
+            "ConversationID": "AG_20240514_123",
+            "ResponseDescription": "Accept the service request successfully.",
+            "ResponseCode": "0",
+        }
+
+        with patch.object(daraja_client._session, "post", return_value=resp) as post:
+            result = daraja_client.c2b_simulate(
+                shortcode="600000",
+                amount=10,
+                msisdn="0712345678",
+                bill_ref_number="TEST001",
+            )
+
+        assert result.get("ResponseCode") == "0"
+        _, kwargs = post.call_args
+        assert kwargs["json"]["ShortCode"] == "600000"
+        assert kwargs["json"]["Msisdn"] == "254712345678"
+
 
 # =====================================================================
 # Configuration Tests
@@ -315,6 +339,25 @@ class TestClientConfiguration:
 
         # Should be configured for production
         assert client.environment == "production"
+
+    @patch.dict(
+        os.environ,
+        {
+            "DARAJA_CONSUMER_KEY": "key",
+            "DARAJA_CONSUMER_SECRET": "secret",
+            "DARAJA_BUSINESS_SHORTCODE": "123456",
+            "DARAJA_PASSKEY": "passkey",
+            "DARAJA_CALLBACK_URL": "https://example.com/stk",
+        },
+        clear=True,
+    )
+    def test_from_env_accepts_daraja_aliases(self):
+        """Client should accept Daraja aliases used by deployment env files."""
+        client = DarajaClient.from_env()
+
+        assert client.business_shortcode == "123456"
+        assert client.passkey == "passkey"
+        assert client.callback_url == "https://example.com/stk"
 
 
 # =====================================================================

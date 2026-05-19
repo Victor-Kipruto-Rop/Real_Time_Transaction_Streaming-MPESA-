@@ -89,11 +89,15 @@ class DarajaClient:
         consumer_secret = os.getenv("DARAJA_CONSUMER_SECRET") or os.getenv(
             "DARAJA_SECRET"
         )
-        business_shortcode = os.getenv("MPESA_BUSINESS_SHORTCODE") or os.getenv(
-            "BUSINESS_SHORTCODE"
+        business_shortcode = (
+            os.getenv("MPESA_BUSINESS_SHORTCODE")
+            or os.getenv("DARAJA_BUSINESS_SHORTCODE")
+            or os.getenv("DARAJA_SHORTCODE")
+            or os.getenv("DARAJA_C2B_SHORTCODE")
+            or os.getenv("BUSINESS_SHORTCODE")
         )
-        passkey = os.getenv("MPESA_PASSKEY")
-        callback_url = os.getenv("CALLBACK_URL")
+        passkey = os.getenv("MPESA_PASSKEY") or os.getenv("DARAJA_PASSKEY")
+        callback_url = os.getenv("CALLBACK_URL") or os.getenv("DARAJA_CALLBACK_URL")
 
         missing = [
             name
@@ -177,6 +181,7 @@ class DarajaClient:
         validation_url: Optional[str] = None,
         confirmation_url: Optional[str] = None,
         response_type: str = "Canceled",
+        shortcode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Register C2B validation and confirmation URLs.
@@ -201,7 +206,7 @@ class DarajaClient:
         url = f"{self.base_url}/mpesa/c2b/v1/registerurl"
 
         payload = {
-            "ShortCode": self.business_shortcode,
+            "ShortCode": shortcode or self.business_shortcode,
             "ResponseType": response_type,
             "ConfirmationURL": confirmation_url,
             "ValidationURL": validation_url,
@@ -222,6 +227,59 @@ class DarajaClient:
 
         except requests.exceptions.RequestException as e:
             logger.error(f"C2B registration failed: {str(e)}")
+            raise
+
+    def register_url(
+        self,
+        shortcode: Optional[str] = None,
+        response_type: str = "Completed",
+        confirmation_url: Optional[str] = None,
+        validation_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Compatibility wrapper for older Daraja helper scripts."""
+        return self.c2b_register_url(
+            validation_url=validation_url,
+            confirmation_url=confirmation_url,
+            response_type=response_type,
+            shortcode=shortcode,
+        )
+
+    def c2b_simulate(
+        self,
+        shortcode: Optional[str] = None,
+        command_id: str = "CustomerPayBillOnline",
+        amount: int = 1,
+        msisdn: str = "254708374149",
+        bill_ref_number: str = "TEST001",
+    ) -> Dict[str, Any]:
+        """Simulate a sandbox C2B customer payment."""
+        if amount <= 0:
+            raise ValueError("amount must be > 0")
+
+        token = self.get_access_token()
+        url = f"{self.base_url}/mpesa/c2b/v1/simulate"
+        payload = {
+            "ShortCode": shortcode or self.business_shortcode,
+            "CommandID": command_id,
+            "Amount": amount,
+            "Msisdn": normalize_ke_phone(msisdn),
+            "BillRefNumber": bill_ref_number,
+        }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = self._session.post(
+                url, json=payload, headers=headers, timeout=10
+            )
+            response.raise_for_status()
+            logger.info("C2B simulation submitted successfully")
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"C2B simulation failed: {str(e)}")
             raise
 
     def initiate_stk_push(

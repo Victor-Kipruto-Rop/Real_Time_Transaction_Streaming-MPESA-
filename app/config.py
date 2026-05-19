@@ -66,8 +66,11 @@ class Settings(BaseSettings):
     # Safaricom Daraja API
     DARAJA_CONSUMER_KEY: str = os.getenv("DARAJA_CONSUMER_KEY", "")
     DARAJA_CONSUMER_SECRET: str = os.getenv("DARAJA_CONSUMER_SECRET", "")
-    DARAJA_BUSINESS_SHORTCODE: str = os.getenv("DARAJA_BUSINESS_SHORTCODE", "8759693")
-    DARAJA_PASSKEY: str = os.getenv("DARAJA_PASSKEY", "")
+    DARAJA_BUSINESS_SHORTCODE: str = os.getenv(
+        "DARAJA_BUSINESS_SHORTCODE",
+        os.getenv("MPESA_BUSINESS_SHORTCODE", "8759693"),
+    )
+    DARAJA_PASSKEY: str = os.getenv("DARAJA_PASSKEY", os.getenv("MPESA_PASSKEY", ""))
     DARAJA_ENVIRONMENT: str = os.getenv("DARAJA_ENVIRONMENT", "sandbox")
 
     # Redis

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
   phone_number TEXT,
   amount NUMERIC,
   account_reference TEXT,
-  transaction_time TEXT,
+  transaction_time TIMESTAMPTZ,
   received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   source TEXT NOT NULL,
   payload JSONB NOT NULL
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS mpesa_stk_transactions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_mpesa_transactions_raw_transaction_id
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mpesa_transactions_raw_transaction_id
   ON mpesa_transactions_raw (transaction_id);
 
 CREATE INDEX IF NOT EXISTS idx_mpesa_transactions_raw_phone_number

@@ -97,6 +97,7 @@ class MpesaKafkaProducer:
                 on_delivery=self._delivery_report,
             )
             self._producer.poll(0)
+            self._producer.flush(5)
             return True
         except Exception as e:
             logger.error("Error publishing event: %s", str(e))
@@ -128,7 +129,8 @@ class MpesaKafkaProducer:
                 "transaction_id": transaction.get("TransID"),
                 "phone_number": transaction.get("MSISDN"),
                 "amount": None if amount is None else str(amount),
-                "account_reference": transaction.get("AccountReference"),
+                "account_reference": transaction.get("AccountReference")
+                or transaction.get("BillRefNumber"),
                 "transaction_time": transaction.get("TransTime"),
                 "received_at": datetime.now().isoformat(),
                 "source": "daraja_webhook",

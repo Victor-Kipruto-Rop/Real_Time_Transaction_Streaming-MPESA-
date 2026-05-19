@@ -46,6 +46,17 @@ help:
 	@echo "  make db-health          - Check database health"
 	@echo "  make db-indexes         - Create recommended indexes"
 	@echo ""
+	@echo "$(GREEN)Daraja / M-Pesa Integration:$(NC)"
+	@echo "  make daraja-test        - Test Daraja OAuth connection"
+	@echo "  make daraja-c2b-test    - Test C2B transaction simulation"
+	@echo "  make daraja-register-urls - Register C2B webhook URLs"
+	@echo "  make test-daraja        - Run Daraja integration tests"
+	@echo "  make test-daraja-cov    - Run Daraja tests with coverage"
+	@echo ""
+	@echo "$(GREEN)Integration Validation:$(NC)"
+	@echo "  make validate-integration        - Validate all .env configs"
+	@echo "  make validate-integration-verbose - Verbose validation output"
+	@echo ""
 	@echo "$(GREEN)Infrastructure:$(NC)"
 	@echo "  make infra-up           - Start Docker services"
 	@echo "  make infra-down         - Stop Docker services"
@@ -292,6 +303,42 @@ db-indexes:
 	@echo "$(BLUE)Creating recommended database indexes...$(NC)"
 	@$(VENV_PYTHON) -c "from ingestion.db_queries import IndexRecommendations; IndexRecommendations.create_recommended_indexes()"
 	@echo "$(GREEN)✓ Indexes created$(NC)"
+
+# ============================================================================
+# DARAJA / M-PESA INTEGRATION
+# ============================================================================
+
+daraja-test:
+	@echo "$(BLUE)Testing Daraja OAuth connection...$(NC)"
+	@$(VENV_PYTHON) scripts/test_daraja_oauth.py
+
+daraja-c2b-test:
+	@echo "$(BLUE)Testing C2B transaction simulation...$(NC)"
+	@$(VENV_PYTHON) scripts/test_daraja_c2b.py
+
+daraja-register-urls:
+	@echo "$(BLUE)Registering C2B validation and confirmation URLs...$(NC)"
+	@$(VENV_PYTHON) scripts/register_daraja_urls.py
+
+test-daraja:
+	@echo "$(BLUE)Running Daraja integration tests...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_daraja_integration.py -v --tb=short
+
+test-daraja-cov:
+	@echo "$(BLUE)Running Daraja tests with coverage...$(NC)"
+	@$(VENV_PYTHON) -m pytest tests/test_daraja_integration.py --cov=ingestion.daraja_client --cov=ingestion.mpesa_transactions --cov-report=term-missing
+
+# ============================================================================
+# INTEGRATION VALIDATION
+# ============================================================================
+
+validate-integration:
+	@echo "$(BLUE)Validating all .env configurations and integrations...$(NC)"
+	@$(VENV_PYTHON) scripts/integration_config_validator.py
+
+validate-integration-verbose:
+	@echo "$(BLUE)Validating with verbose output...$(NC)"
+	@$(VENV_PYTHON) scripts/integration_config_validator.py -v
 
 # ============================================================================
 # PRODUCTION & SECURITY
