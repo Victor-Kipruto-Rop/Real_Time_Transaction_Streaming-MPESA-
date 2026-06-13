@@ -1,0 +1,62 @@
+[
+  {
+    "TransID": "TXN1234567890",
+    "TransAmount": "1500.00",
+    "MSISDN": "254712345678",
+    "AccountReference": "ACC001",
+    "TransTime": "20260613120000",
+    "BillRefNumber": "BILL001",
+    "FirstName": "John",
+    "MiddleName": "K",
+    "LastName": "Doe",
+    "OrgAccountBalance": "50000.00"
+  },
+  {
+    "TransID": "TXN1234567891",
+    "TransAmount": "2500.00",
+    "MSISDN": "254723456789",
+    "AccountReference": "ACC002",
+    "TransTime": "20260613120100",
+    "BillRefNumber": "BILL002",
+    "FirstName": "Jane",
+    "MiddleName": "M",
+    "LastName": "Smith",
+    "OrgAccountBalance": "52500.00"
+  },
+  {
+    "TransID": "TXN1234567892",
+    "TransAmount": "500.00",
+    "MSISDN": "254734567890",
+    "AccountReference": "ACC003",
+    "TransTime": "20260613120200",
+    "BillRefNumber": "BILL003",
+    "FirstName": "Peter",
+    "MiddleName": "",
+    "LastName": "Johnson",
+    "OrgAccountBalance": "53000.00"
+  },
+  {
+    "TransID": "TXN1234567893",
+    "TransAmount": "10000.00",
+    "MSISDN": "254745678901",
+    "AccountReference": "ACC004",
+    "TransTime": "20260613120300",
+    "BillRefNumber": "BILL004",
+    "FirstName": "Mary",
+    "MiddleName": "A",
+    "LastName": "Williams",
+    "OrgAccountBalance": "63000.00"
+  },
+  {
+    "TransID": "TXN1234567894",
+    "TransAmount": "750.00",
+    "MSISDN": "254756789012",
+    "AccountReference": "ACC005",
+    "TransTime": "20260613120400",
+    "BillRefNumber": "BILL005",
+    "FirstName": "David",
+    "MiddleName": "L",
+    "LastName": "Brown",
+    "OrgAccountBalance": "63750.00"
+  }
+]

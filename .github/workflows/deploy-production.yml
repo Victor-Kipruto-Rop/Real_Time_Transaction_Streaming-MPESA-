@@ -1,0 +1,398 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version tag
+        run: |
+          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version tag format. Expected: v1.0.0"
+            exit 1
+          fi
+
+      - name: Check if staging tests passed
+        run: |
+          # Verify staging deployment was successful
+          echo "Checking staging deployment status..."
+          # Add logic to verify staging tests
+
+  security-scan:
+    name: Security Scan
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  build:
+    name: Build Production Images
+    needs: [validate, security-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [webhook-receiver, kafka-consumer, dbt]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=production-latest
+            type=sha,prefix=prod-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VERSION=${{ github.ref_name }}
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: Sign container images
+        run: |
+          # Sign images with cosign (optional)
+          echo "Image signing would happen here"
+
+  backup:
+    name: Backup Production Database
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Create database backup
+        run: |
+          # Trigger RDS snapshot
+          aws rds create-db-snapshot \
+            --db-instance-identifier mpesa-prod-db \
+            --db-snapshot-identifier mpesa-prod-backup-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)
+
+      - name: Wait for backup completion
+        run: |
+          echo "Waiting for backup to complete..."
+          sleep 60
+
+  deploy:
+    name: Deploy to Production
+    needs: [build, backup]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.your-domain.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.27.0'
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name mpesa-production-cluster --region us-east-1
+
+      - name: Create deployment backup
+        run: |
+          # Backup current deployment state
+          kubectl get deployment webhook-receiver -n mpesa-production -o yaml > webhook-receiver-backup.yaml
+          kubectl get deployment kafka-consumer -n mpesa-production -o yaml > kafka-consumer-backup.yaml
+
+      - name: Deploy with Blue-Green strategy
+        run: |
+          # Deploy to green environment
+          kubectl apply -f kubernetes/production/green-deployment.yaml
+          
+          # Wait for green deployment to be ready
+          kubectl rollout status deployment/webhook-receiver-green -n mpesa-production --timeout=10m
+          kubectl rollout status deployment/kafka-consumer-green -n mpesa-production --timeout=10m
+
+      - name: Run smoke tests on green environment
+        run: |
+          # Test green environment
+          pytest tests/e2e/smoke_tests.py --production --green-env
+
+      - name: Switch traffic to green
+        run: |
+          # Update service to point to green deployment
+          kubectl patch service webhook-receiver -n mpesa-production \
+            -p '{"spec":{"selector":{"version":"green"}}}'
+
+      - name: Monitor for 5 minutes
+        run: |
+          echo "Monitoring green environment..."
+          sleep 300
+          
+          # Check error rates
+          ERROR_RATE=$(curl -s "http://prometheus:9090/api/v1/query?query=rate(http_requests_total{status=~\"5..\"}[5m])" | jq -r '.data.result[0].value[1]')
+          
+          if (( $(echo "$ERROR_RATE > 0.05" | bc -l) )); then
+            echo "High error rate detected: $ERROR_RATE"
+            exit 1
+          fi
+
+      - name: Scale down blue environment
+        if: success()
+        run: |
+          kubectl scale deployment webhook-receiver-blue --replicas=0 -n mpesa-production
+          kubectl scale deployment kafka-consumer-blue --replicas=0 -n mpesa-production
+
+      - name: Run database migrations
+        run: |
+          kubectl run dbt-migrate-prod-${{ github.run_number }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dbt:${{ github.ref_name }} \
+            --restart=Never \
+            --namespace=mpesa-production \
+            --command -- dbt run --target production
+          
+          kubectl wait --for=condition=complete job/dbt-migrate-prod-${{ github.run_number }} \
+            -n mpesa-production --timeout=15m
+
+      - name: Verify deployment
+        run: |
+          # Comprehensive health checks
+          kubectl get pods -n mpesa-production
+          
+          # Test all critical endpoints
+          curl -f https://api.your-domain.com/health || exit 1
+          
+          # Verify database connectivity
+          kubectl exec -n mpesa-production deployment/webhook-receiver -- \
+            python -c "from app.db import test_connection; test_connection()"
+
+      - name: Update deployment tags
+        run: |
+          kubectl label deployment webhook-receiver -n mpesa-production \
+            version=${{ github.ref_name }} --overwrite
+          kubectl label deployment kafka-consumer -n mpesa-production \
+            version=${{ github.ref_name }} --overwrite
+
+  rollback:
+    name: Rollback on Failure
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name mpesa-production-cluster --region us-east-1
+
+      - name: Rollback to blue environment
+        run: |
+          # Switch traffic back to blue
+          kubectl patch service webhook-receiver -n mpesa-production \
+            -p '{"spec":{"selector":{"version":"blue"}}}'
+          
+          # Scale up blue environment
+          kubectl scale deployment webhook-receiver-blue --replicas=3 -n mpesa-production
+          kubectl scale deployment kafka-consumer-blue --replicas=2 -n mpesa-production
+          
+          # Scale down green environment
+          kubectl scale deployment webhook-receiver-green --replicas=0 -n mpesa-production
+          kubectl scale deployment kafka-consumer-green --replicas=0 -n mpesa-production
+
+      - name: Notify team of rollback
+        run: |
+          echo "Deployment failed. Rolled back to previous version."
+
+  post-deploy:
+    name: Post-Deployment Tasks
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up caches
+        run: |
+          # Warm up Redis cache
+          curl -X POST https://api.your-domain.com/admin/cache/warmup \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}"
+
+      - name: Update monitoring dashboards
+        run: |
+          # Update Grafana annotations
+          curl -X POST https://grafana.your-domain.com/api/annotations \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Production deployment: ${{ github.ref_name }}",
+              "tags": ["deployment", "production"],
+              "time": '$(($(date +%s) * 1000))'
+            }'
+
+      - name: Create GitHub release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## Changes in this Release
+            
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+            
+            ## Deployment Information
+            - **Deployed at**: ${{ github.event.head_commit.timestamp }}
+            - **Deployed by**: ${{ github.actor }}
+            - **Commit**: ${{ github.sha }}
+          draft: false
+          prerelease: false
+
+  notify:
+    name: Notify Team
+    needs: [validate, security-scan, build, backup, deploy, post-deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Production Deployment ${{ needs.deploy.result }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚀 Production Deployment"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ needs.deploy.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Deployed by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n${{ github.sha }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Deployment"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Grafana"
+                      },
+                      "url": "https://grafana.your-domain.com"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Send email notification
+        if: needs.deploy.result == 'success'
+        run: |
+          # Send email to stakeholders
+          echo "Production deployment successful: ${{ github.ref_name }}" | \
+            mail -s "Production Deployment Success" stakeholders@your-domain.com

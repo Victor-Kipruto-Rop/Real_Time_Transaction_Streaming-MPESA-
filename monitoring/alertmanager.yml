@@ -1,0 +1,186 @@
+# Alertmanager Configuration for M-Pesa Analytics Platform
+
+global:
+  resolve_timeout: 5m
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alerts
+route:
+  # Default receiver
+  receiver: 'default'
+  
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # Wait before sending initial notification
+  group_wait: 10s
+  
+  # Wait before sending notification about new alerts in group
+  group_interval: 10s
+  
+  # Wait before re-sending notification
+  repeat_interval: 12h
+
+  # Child routes
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 4h
+      continue: true
+
+    # Warning alerts - less urgent
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 12h
+
+    # Business alerts - notify business team
+    - match:
+        component: business
+      receiver: 'business-team'
+      group_wait: 1m
+      group_interval: 15m
+      repeat_interval: 24h
+
+    # Database alerts
+    - match:
+        component: postgresql
+      receiver: 'database-team'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 6h
+
+    # Kafka alerts
+    - match:
+        component: kafka
+      receiver: 'platform-team'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 6h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Inhibit service down alerts if instance is down
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+# Receivers - notification destinations
+receivers:
+  # Default receiver
+  - name: 'default'
+    slack_configs:
+      - channel: '#mpesa-alerts'
+        title: 'M-Pesa Analytics Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    slack_configs:
+      - channel: '#mpesa-critical'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Component:* {{ .CommonLabels.component }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+        color: 'danger'
+    
+    email_configs:
+      - to: 'oncall@your-domain.com'
+        from: 'alerts@your-domain.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: 'alerts@your-domain.com'
+        auth_password: 'your-email-password'
+        headers:
+          Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          Alert: {{ .GroupLabels.alertname }}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+    
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    slack_configs:
+      - channel: '#mpesa-warnings'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Component:* {{ .CommonLabels.component }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+        send_resolved: true
+        color: 'warning'
+
+  # Business team alerts
+  - name: 'business-team'
+    slack_configs:
+      - channel: '#mpesa-business'
+        title: '📊 Business Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+    
+    email_configs:
+      - to: 'business-team@your-domain.com'
+        from: 'alerts@your-domain.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: 'alerts@your-domain.com'
+        auth_password: 'your-email-password'
+        headers:
+          Subject: 'Business Alert: {{ .GroupLabels.alertname }}'
+
+  # Database team alerts
+  - name: 'database-team'
+    slack_configs:
+      - channel: '#mpesa-database'
+        title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Component:* {{ .CommonLabels.component }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+        send_resolved: true
+
+  # Platform team alerts
+  - name: 'platform-team'
+    slack_configs:
+      - channel: '#mpesa-platform'
+        title: '⚙️ Platform Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Component:* {{ .CommonLabels.component }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+        send_resolved: true

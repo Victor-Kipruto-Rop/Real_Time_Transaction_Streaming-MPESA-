@@ -1,0 +1,100 @@
+name: Load Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration in minutes'
+        required: true
+        default: '5'
+      users:
+        description: 'Number of concurrent users'
+        required: true
+        default: '100'
+      ramp_up:
+        description: 'Ramp-up time in seconds'
+        required: true
+        default: '60'
+
+jobs:
+  load-test:
+    name: Run Load Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install locust pytest-benchmark
+    
+    - name: Start test infrastructure
+      run: |
+        docker compose up -d postgres kafka redis
+        sleep 30
+    
+    - name: Run Locust load test
+      run: |
+        cd tests/load
+        locust -f locustfile.py \
+          --headless \
+          --users ${{ github.event.inputs.users }} \
+          --spawn-rate 10 \
+          --run-time ${{ github.event.inputs.duration }}m \
+          --host http://localhost:5000 \
+          --html load-test-report.html \
+          --csv load-test-results
+    
+    - name: Upload load test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: load-test-results
+        path: |
+          tests/load/load-test-report.html
+          tests/load/load-test-results*.csv
+    
+    - name: Check performance thresholds
+      run: |
+        python tests/load/check_thresholds.py
+    
+    - name: Stop infrastructure
+      if: always()
+      run: docker compose down
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark
+    
+    - name: Run benchmarks
+      run: |
+        pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark-results.json
+    
+    - name: Compare with baseline
+      run: |
+        python tests/benchmarks/compare_baseline.py benchmark-results.json

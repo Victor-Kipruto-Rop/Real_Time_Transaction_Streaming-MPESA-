@@ -1,0 +1,304 @@
+# Prometheus Alerting Rules for M-Pesa Analytics Platform
+
+groups:
+  - name: application_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: webhook-receiver
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.instance }}"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 2 minutes"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: webhook-receiver
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.instance }}"
+
+      # High request rate
+      - alert: HighRequestRate
+        expr: |
+          rate(http_requests_total[5m]) > 200
+        for: 10m
+        labels:
+          severity: warning
+          component: webhook-receiver
+        annotations:
+          summary: "Unusually high request rate"
+          description: "Request rate is {{ $value }} req/s for {{ $labels.instance }}"
+
+  - name: kafka_alerts
+    interval: 30s
+    rules:
+      # Kafka consumer lag
+      - alert: KafkaConsumerLag
+        expr: |
+          kafka_consumergroup_lag > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: kafka-consumer
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} messages"
+
+      # Kafka broker down
+      - alert: KafkaBrokerDown
+        expr: |
+          kafka_brokers < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Kafka broker is down"
+          description: "No Kafka brokers are available"
+
+      # High message production rate
+      - alert: HighKafkaProduceRate
+        expr: |
+          rate(kafka_producer_record_send_total[5m]) > 1000
+        for: 10m
+        labels:
+          severity: info
+          component: kafka-producer
+        annotations:
+          summary: "High Kafka message production rate"
+          description: "Producing {{ $value }} messages/s"
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Database connection pool exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: postgresql
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+
+      # Slow queries
+      - alert: SlowQueries
+        expr: |
+          rate(pg_stat_statements_mean_time_seconds[5m]) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: postgresql
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}s"
+
+      # Database disk usage
+      - alert: HighDatabaseDiskUsage
+        expr: |
+          (node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"}) / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} > 0.85
+        for: 5m
+        labels:
+          severity: critical
+          component: postgresql
+        annotations:
+          summary: "Database disk usage is high"
+          description: "Disk usage is {{ $value | humanizePercentage }}"
+
+      # Database down
+      - alert: DatabaseDown
+        expr: |
+          pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "Database {{ $labels.instance }} is not responding"
+
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      # Redis memory usage
+      - alert: HighRedisMemoryUsage
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Redis down
+      - alert: RedisDown
+        expr: |
+          redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is not responding"
+
+      # High eviction rate
+      - alert: HighRedisEvictionRate
+        expr: |
+          rate(redis_evicted_keys_total[5m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "High Redis key eviction rate"
+          description: "Evicting {{ $value }} keys/s"
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value }}% disk space available on {{ $labels.instance }} {{ $labels.mountpoint }}"
+
+      # Disk space critical
+      - alert: DiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space"
+          description: "Only {{ $value }}% disk space available on {{ $labels.instance }} {{ $labels.mountpoint }}"
+
+  - name: business_alerts
+    interval: 1m
+    rules:
+      # Transaction volume drop
+      - alert: TransactionVolumeDrop
+        expr: |
+          rate(transactions_total[10m]) < 0.5 * rate(transactions_total[1h] offset 1h)
+        for: 15m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Transaction volume has dropped significantly"
+          description: "Current rate is {{ $value }} transactions/s, which is less than 50% of the hourly average"
+
+      # High fraud detection rate
+      - alert: HighFraudRate
+        expr: |
+          rate(fraud_detected_total[10m]) / rate(transactions_total[10m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: fraud-detection
+        annotations:
+          summary: "High fraud detection rate"
+          description: "Fraud rate is {{ $value | humanizePercentage }}"
+
+      # Failed transaction rate
+      - alert: HighFailedTransactionRate
+        expr: |
+          rate(transactions_failed_total[5m]) / rate(transactions_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High failed transaction rate"
+          description: "Failed transaction rate is {{ $value | humanizePercentage }}"
+
+  - name: daraja_api_alerts
+    interval: 30s
+    rules:
+      # Daraja API errors
+      - alert: DarajaAPIErrors
+        expr: |
+          rate(daraja_api_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: daraja-client
+        annotations:
+          summary: "High Daraja API error rate"
+          description: "Error rate is {{ $value }} errors/s"
+
+      # Daraja OAuth token expiring soon
+      - alert: DarajaTokenExpiringSoon
+        expr: |
+          daraja_oauth_token_expiry_seconds < 300
+        labels:
+          severity: warning
+          component: daraja-client
+        annotations:
+          summary: "Daraja OAuth token expiring soon"
+          description: "Token expires in {{ $value }}s"
+
+      # Daraja API slow response
+      - alert: DarajaAPISlowResponse
+        expr: |
+          histogram_quantile(0.95, rate(daraja_api_duration_seconds_bucket[5m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: daraja-client
+        annotations:
+          summary: "Daraja API responding slowly"
+          description: "95th percentile response time is {{ $value }}s"
