@@ -24,7 +24,6 @@ from pydantic import BaseModel, Field, field_validator
 from app.config import settings
 from schemas.transaction_schema import normalize_ke_phone
 
-
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
 _STATE_LOCK = threading.RLock()

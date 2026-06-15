@@ -28,12 +28,12 @@ This project adheres to a code of conduct that all contributors are expected to 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/Real_Time_Transaction_Streaming-MPESA-.git
+   git clone https://github.com/Victor-Kipruto-Rop/Real_Time_Transaction_Streaming-MPESA-.git
    cd Real_Time_Transaction_Streaming-MPESA-
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/kipruto45/Real_Time_Transaction_Streaming-MPESA-.git
+   git remote add upstream https://github.com/Victor-Kipruto-Rop/Real_Time_Transaction_Streaming-MPESA-.git
    ```
 
 ## Development Setup

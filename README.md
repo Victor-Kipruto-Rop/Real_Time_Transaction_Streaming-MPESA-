@@ -68,7 +68,7 @@ Grafana / Streamlit Dashboard
 ## Clone Repository
 
 ```bash
-git clone https://github.com/kipruto45/Real_Time_Transaction_Streaming-MPESA-.git
+git clone https://github.com/Victor-Kipruto-Rop/Real_Time_Transaction_Streaming-MPESA-.git
 
 cd Real_Time_Transaction_Streaming-MPESA-
 ```
@@ -109,6 +109,7 @@ curl -s -X POST http://localhost:5000/webhook/c2b/confirmation \
 
 # Author
 
-Victor Kipruto
+Victor Kipruto Rop
 
-GitHub: https://github.com/kipruto45
+GitHub: https://github.com/Victor-Kipruto-Rop
+Email:  kiprutovictor39@gmail.com

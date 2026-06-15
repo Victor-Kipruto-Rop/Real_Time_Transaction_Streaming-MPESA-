@@ -28,7 +28,7 @@ class MPesaAnalyticsClient:
     
     def health_check(self):
         """Check API health status"""
-        response = requests.get(f'{self.base_url}/health')
+        response = requests.get(f'{self.base_url}/health', timeout=10)
         return response.json()
     
     def get_transaction(self, transaction_id: str):

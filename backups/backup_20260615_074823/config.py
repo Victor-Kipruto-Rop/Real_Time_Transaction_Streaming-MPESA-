@@ -37,9 +37,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", 5432))
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "mpesa_analytics")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "data_engineer")
-    POSTGRES_PASSWORD: str = os.getenv(
-        "POSTGRES_PASSWORD", "change_me_to_secure_password"
-    )
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "change_me_to_secure_password")
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", 20))
 
     @property
@@ -54,9 +52,7 @@ class Settings(BaseSettings):
 
     # Kafka
     KAFKA_BROKERS: str = os.getenv("KAFKA_BROKERS", "localhost:9092")
-    KAFKA_TOPIC_TRANSACTIONS: str = os.getenv(
-        "KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions"
-    )
+    KAFKA_TOPIC_TRANSACTIONS: str = os.getenv("KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions")
     KAFKA_GROUP_ID: str = os.getenv("KAFKA_GROUP_ID", "mpesa_streaming_group")
 
     # Grafana

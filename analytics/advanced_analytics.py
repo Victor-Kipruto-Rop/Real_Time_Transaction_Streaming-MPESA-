@@ -49,17 +49,14 @@ class AdvancedAnalyticsEngine:
 
     def get_transactions(self, days: int = 30) -> pd.DataFrame:
         """Fetch transactions for analysis"""
-        query = (
-            """
+        query = """
         SELECT
             transaction_id, phone_number, amount, transaction_time,
             business_shortcode, region, reference, payment_method
         FROM mpesa_transactions_raw
         WHERE transaction_time >= NOW() - INTERVAL '%d days'
         ORDER BY transaction_time DESC
-        """
-            % days
-        )
+        """ % days
 
         return pd.read_sql_query(query, self.conn)
 

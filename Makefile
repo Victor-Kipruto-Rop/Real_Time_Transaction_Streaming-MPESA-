@@ -104,17 +104,17 @@ setup:
 		echo "Creating virtual environment..."; \
 		$(PYTHON) -m venv $(VENV); \
 	fi
-	@$(VENV_PYTHON) -m pip install -r requirements.txt
+	@./venv/bin/python -m pip install -r requirements.txt
 	@echo "$(GREEN)✓ Setup complete$(NC)"
 
 verify:
 	@echo "$(BLUE)Verifying M-Pesa Analytics Platform...$(NC)"
-	@$(VENV_PYTHON) scripts/verify_setup.py
+	@./venv/bin/python scripts/verify_setup.py
 	@echo "$(GREEN)✓ Verification complete$(NC)"
 
 test-api:
 	@echo "$(BLUE)Testing Daraja API...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_daraja_client.py -v
+	@./venv/bin/python -m pytest tests/test_daraja_client.py -v
 	@echo "$(GREEN)✓ API test complete$(NC)"
 
 # ============================================================================
@@ -146,35 +146,35 @@ grafana-up:
 
 ingest:
 	@echo "$(BLUE)Starting Kafka consumer...$(NC)"
-	@$(VENV_PYTHON) ingestion/kafka_consumer.py
+	@./venv/bin/python ingestion/kafka_consumer.py
 
 transform:
 	@echo "$(BLUE)Running DBT transformations...$(NC)"
 	@POSTGRES_HOST=$(POSTGRES_HOST) POSTGRES_PORT=$(POSTGRES_PORT) POSTGRES_DB=$(POSTGRES_DB) POSTGRES_USER=$(POSTGRES_USER) POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
-		$(VENV_PYTHON) -m dbt.cli.main --log-path $(DBT_LOG_PATH) run --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
+		./venv/bin/python -m dbt.cli.main --log-path $(DBT_LOG_PATH) run --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
 	@POSTGRES_HOST=$(POSTGRES_HOST) POSTGRES_PORT=$(POSTGRES_PORT) POSTGRES_DB=$(POSTGRES_DB) POSTGRES_USER=$(POSTGRES_USER) POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
-		$(VENV_PYTHON) -m dbt.cli.main --log-path $(DBT_LOG_PATH) test --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
+		./venv/bin/python -m dbt.cli.main --log-path $(DBT_LOG_PATH) test --target-path $(DBT_TARGET_PATH) --project-dir dbt --profiles-dir dbt
 	@echo "$(GREEN)✓ Transformations complete$(NC)"
 
 analytics:
 	@echo "$(BLUE)Running advanced analytics...$(NC)"
 	@mkdir -p reports
-	@$(VENV_PYTHON) analytics/advanced_analytics.py | tee reports/analytics_report.json
+	@./venv/bin/python analytics/advanced_analytics.py | tee reports/analytics_report.json
 	@echo "$(GREEN)✓ Analytics complete$(NC)"
 
 fraud-detection:
 	@echo "$(BLUE)Training fraud detection models...$(NC)"
-	@$(VENV_PYTHON) ml/fraud_detection.py
+	@./venv/bin/python ml/fraud_detection.py
 	@echo "$(GREEN)✓ Fraud models trained$(NC)"
 
 dashboards:
 	@echo "$(BLUE)Generating dashboards...$(NC)"
-	@$(VENV_PYTHON) dashboards/grafana_dashboards.py
+	@./venv/bin/python dashboards/grafana_dashboards.py
 	@echo "$(GREEN)✓ Dashboards generated$(NC)"
 
 dashboards-check:
 	@echo "$(BLUE)Validating dashboards...$(NC)"
-	@$(VENV_PYTHON) dashboards/grafana_dashboards.py --check
+	@./venv/bin/python dashboards/grafana_dashboards.py --check
 	@echo "$(GREEN)✓ Dashboards valid$(NC)"
 
 # ============================================================================
@@ -201,39 +201,39 @@ db-backup:
 
 test:
 	@echo "$(BLUE)Running tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/ -v
+	@./venv/bin/python -m pytest tests/ -v
 
 test-all: test
 
 test-unit:
 	@echo "$(BLUE)Running unit tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests -v --ignore=tests/e2e --ignore=tests/security --ignore=tests/load
+	@./venv/bin/python -m pytest tests -v --ignore=tests/e2e --ignore=tests/security --ignore=tests/load
 
 test-integration:
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_integration.py -v
+	@./venv/bin/python -m pytest tests/test_integration.py -v
 
 test-e2e:
 	@echo "$(BLUE)Running end-to-end tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/e2e -v
+	@./venv/bin/python -m pytest tests/e2e -v
 
 test-security:
 	@echo "$(BLUE)Running security tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/security -v
+	@./venv/bin/python -m pytest tests/security -v
 
 lint:
 	@echo "$(BLUE)Running linting...$(NC)"
-	@$(VENV_PYTHON) -m flake8 ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/ --max-line-length=100
+	@./venv/bin/python -m flake8 ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/ --max-line-length=100
 	@echo "$(GREEN)✓ Linting passed$(NC)"
 
 format:
 	@echo "$(BLUE)Formatting code...$(NC)"
-	@$(VENV_PYTHON) -m black ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/
+	@./venv/bin/python -m black ingestion/ streaming/ schemas/ app/ analytics/ ml/ security/ tests/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 type-check:
 	@echo "$(BLUE)Running type checks...$(NC)"
-	@$(VENV_PYTHON) -m mypy ingestion/ streaming/ schemas/ app/ \
+	@./venv/bin/python -m mypy ingestion/ streaming/ schemas/ app/ \
 		--explicit-package-bases \
 		--ignore-missing-imports \
 		--disable-error-code=import-untyped \
@@ -241,7 +241,7 @@ type-check:
 
 coverage:
 	@echo "$(BLUE)Running coverage...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/ --cov=ingestion --cov=streaming --cov=schemas --cov=app --cov-report=term-missing
+	@./venv/bin/python -m pytest tests/ --cov=ingestion --cov=streaming --cov=schemas --cov=app --cov-report=term-missing
 
 # ============================================================================
 # AWS RDS IAM AUTHENTICATION
@@ -259,19 +259,19 @@ rds-setup:
 
 rds-test:
 	@echo "$(BLUE)Testing RDS IAM authentication connection...$(NC)"
-	@$(VENV_PYTHON) -m ingestion.rds_connection
+	@./venv/bin/python -m ingestion.rds_connection
 
 rds-demo:
 	@echo "$(BLUE)Running RDS connection demonstration...$(NC)"
-	@$(VENV_PYTHON) scripts/demo_rds_connection.py
+	@./venv/bin/python scripts/demo_rds_connection.py
 
 test-rds:
 	@echo "$(BLUE)Running RDS connection unit tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_rds_connection.py -v --tb=short
+	@./venv/bin/python -m pytest tests/test_rds_connection.py -v --tb=short
 
 test-rds-cov:
 	@echo "$(BLUE)Running RDS tests with coverage...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_rds_connection.py --cov=ingestion.rds_connection --cov-report=term-missing
+	@./venv/bin/python -m pytest tests/test_rds_connection.py --cov=ingestion.rds_connection --cov-report=term-missing
 
 # ============================================================================
 # DATABASE OPTIMIZATION
@@ -289,19 +289,19 @@ db-optimize:
 
 test-db-optimize:
 	@echo "$(BLUE)Running database optimization tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_db_optimization.py -v --tb=short
+	@./venv/bin/python -m pytest tests/test_db_optimization.py -v --tb=short
 
 test-db-optimize-cov:
 	@echo "$(BLUE)Running database optimization tests with coverage...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_db_optimization.py --cov=ingestion.db_pool --cov=ingestion.db_queries --cov=ingestion.db_cache --cov-report=term-missing
+	@./venv/bin/python -m pytest tests/test_db_optimization.py --cov=ingestion.db_pool --cov=ingestion.db_queries --cov=ingestion.db_cache --cov-report=term-missing
 
 db-health:
 	@echo "$(BLUE)Checking database health...$(NC)"
-	@$(VENV_PYTHON) -c "from ingestion.db_queries import DatabaseQueries; print('✓ Database healthy' if DatabaseQueries.health_check() else '✗ Database unhealthy')"
+	@./venv/bin/python -c "from ingestion.db_queries import DatabaseQueries; print('✓ Database healthy' if DatabaseQueries.health_check() else '✗ Database unhealthy')"
 
 db-indexes:
 	@echo "$(BLUE)Creating recommended database indexes...$(NC)"
-	@$(VENV_PYTHON) -c "from ingestion.db_queries import IndexRecommendations; IndexRecommendations.create_recommended_indexes()"
+	@./venv/bin/python -c "from ingestion.db_queries import IndexRecommendations; IndexRecommendations.create_recommended_indexes()"
 	@echo "$(GREEN)✓ Indexes created$(NC)"
 
 # ============================================================================
@@ -310,23 +310,23 @@ db-indexes:
 
 daraja-test:
 	@echo "$(BLUE)Testing Daraja OAuth connection...$(NC)"
-	@$(VENV_PYTHON) scripts/test_daraja_oauth.py
+	@./venv/bin/python scripts/test_daraja_oauth.py
 
 daraja-c2b-test:
 	@echo "$(BLUE)Testing C2B transaction simulation...$(NC)"
-	@$(VENV_PYTHON) scripts/test_daraja_c2b.py
+	@./venv/bin/python scripts/test_daraja_c2b.py
 
 daraja-register-urls:
 	@echo "$(BLUE)Registering C2B validation and confirmation URLs...$(NC)"
-	@$(VENV_PYTHON) scripts/register_daraja_urls.py
+	@./venv/bin/python scripts/register_daraja_urls.py
 
 test-daraja:
 	@echo "$(BLUE)Running Daraja integration tests...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_daraja_integration.py -v --tb=short
+	@./venv/bin/python -m pytest tests/test_daraja_integration.py -v --tb=short
 
 test-daraja-cov:
 	@echo "$(BLUE)Running Daraja tests with coverage...$(NC)"
-	@$(VENV_PYTHON) -m pytest tests/test_daraja_integration.py --cov=ingestion.daraja_client --cov=ingestion.mpesa_transactions --cov-report=term-missing
+	@./venv/bin/python -m pytest tests/test_daraja_integration.py --cov=ingestion.daraja_client --cov=ingestion.mpesa_transactions --cov-report=term-missing
 
 # ============================================================================
 # INTEGRATION VALIDATION
@@ -334,11 +334,11 @@ test-daraja-cov:
 
 validate-integration:
 	@echo "$(BLUE)Validating all .env configurations and integrations...$(NC)"
-	@$(VENV_PYTHON) scripts/integration_config_validator.py
+	@./venv/bin/python scripts/integration_config_validator.py
 
 validate-integration-verbose:
 	@echo "$(BLUE)Validating with verbose output...$(NC)"
-	@$(VENV_PYTHON) scripts/integration_config_validator.py -v
+	@./venv/bin/python scripts/integration_config_validator.py -v
 
 # ============================================================================
 # PRODUCTION & SECURITY
@@ -346,7 +346,7 @@ validate-integration-verbose:
 
 security-check:
 	@echo "$(BLUE)Checking security policies...$(NC)"
-	@$(VENV_PYTHON) security/gcp_integration.py
+	@./venv/bin/python security/gcp_integration.py
 
 gcp-setup:
 	@echo "$(BLUE)GCP Setup Instructions:$(NC)"

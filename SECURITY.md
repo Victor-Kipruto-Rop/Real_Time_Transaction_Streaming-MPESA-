@@ -17,7 +17,7 @@ We take the security of M-Pesa Real-Time Transaction Streaming Pipeline seriousl
 
 **Please do NOT report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@your-domain.com**
+Instead, please report them via email to: **kiprutovictor39@gmail.com**
 
 Include the following information:
 - Type of vulnerability
@@ -228,9 +228,9 @@ Include the following information:
 
 ### Contact Information
 
-- **Security Team**: security@your-domain.com
-- **Emergency Contact**: +254-XXX-XXXXXX
-- **Incident Response**: incidents@your-domain.com
+- **Security Team**: kiprutovictor39@gmail.com
+- **Emergency Contact**: +254723484552
+- **Incident Response**: kiprutovictor39@gmail.com
 
 ## Security Tools
 

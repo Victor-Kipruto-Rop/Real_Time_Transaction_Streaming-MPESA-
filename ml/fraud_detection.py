@@ -209,16 +209,13 @@ class FraudDetectionEngine:
         """Train fraud detection models"""
         logger.info("Training fraud detection models...")
 
-        query = (
-            """
+        query = """
         SELECT
             transaction_id, phone_number, amount, transaction_time,
             business_shortcode, region, payment_method
         FROM mpesa_transactions_raw
         WHERE transaction_time >= NOW() - INTERVAL '%d days'
-        """
-            % days
-        )
+        """ % days
 
         df = pd.read_sql_query(query, self.conn)
 
@@ -384,17 +381,14 @@ class FraudDetectionEngine:
         """Run fraud detection on recent transactions"""
         logger.info("Running batch fraud detection...")
 
-        query = (
-            """
+        query = """
         SELECT
             transaction_id, phone_number, amount, transaction_time,
             business_shortcode, region, payment_method
         FROM mpesa_transactions_raw
         WHERE transaction_time >= NOW() - INTERVAL '%d days'
         LIMIT 10000
-        """
-            % days
-        )
+        """ % days
 
         df = pd.read_sql_query(query, self.conn)
 
