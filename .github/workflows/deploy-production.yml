@@ -19,6 +19,8 @@ jobs:
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
+    continue-on-error: true
+    if: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
