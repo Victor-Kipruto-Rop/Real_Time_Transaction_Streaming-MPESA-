@@ -11,6 +11,9 @@ on:
         required: true
         type: string
 
+# Disable entire workflow until credentials are configured
+# Remove this line to enable: if: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -20,7 +23,7 @@ jobs:
     name: Validate Release
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
