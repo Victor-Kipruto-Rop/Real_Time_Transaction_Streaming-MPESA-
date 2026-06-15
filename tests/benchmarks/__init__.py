@@ -7,4 +7,4 @@ Run benchmarks with:
     python -m tests.benchmarks.benchmark_api
 """
 
-__version__ = '1.0.0'
+__version__ = "1.0.0"

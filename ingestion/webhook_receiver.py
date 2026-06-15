@@ -305,9 +305,9 @@ def create_app() -> Flask:
                                 "transaction_id": row[0],
                                 "phone_number": row[1],
                                 "amount": str(row[2]),
-                                "transaction_time": row[3].isoformat()
-                                if row[3]
-                                else None,
+                                "transaction_time": (
+                                    row[3].isoformat() if row[3] else None
+                                ),
                                 "source": row[4],
                                 "received_at": row[5].isoformat() if row[5] else None,
                             }

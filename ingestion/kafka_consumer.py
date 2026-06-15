@@ -352,10 +352,10 @@ class SafaricomTransactionProcessor:
             "processed_count": self.processed_count,
             "error_count": self.error_count,
             "error_rate": (
-                self.error_count / (self.processed_count + self.error_count) * 100
-            )
-            if (self.processed_count + self.error_count) > 0
-            else 0,
+                (self.error_count / (self.processed_count + self.error_count) * 100)
+                if (self.processed_count + self.error_count) > 0
+                else 0
+            ),
         }
 
 

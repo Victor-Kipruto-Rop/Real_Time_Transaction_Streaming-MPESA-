@@ -102,12 +102,10 @@ class HealthChecker:
             cursor.fetchone()
 
             # Get database size
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT pg_size_pretty(pg_database_size(datname))
                 FROM pg_database WHERE datname = current_database()
-            """
-            )
+            """)
             size_row = cursor.fetchone()
             db_size = size_row[0] if size_row else "N/A"
 
@@ -250,12 +248,10 @@ class HealthChecker:
             conn = psycopg2.connect(self.postgres_dsn)
             cursor = conn.cursor()
 
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT MAX(received_at) as last_transaction_time
                 FROM mpesa_transactions_raw
-            """
-            )
+            """)
 
             result = cursor.fetchone()
             last_transaction = result[0] if result and result[0] else None

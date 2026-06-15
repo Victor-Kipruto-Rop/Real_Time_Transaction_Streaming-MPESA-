@@ -40,11 +40,11 @@ def load_environment_variables() -> Tuple[str, int, str, str, str, str]:
         KeyError: If required environment variables are missing
     """
     required_vars = [
-        'RDS_DB_HOST',
-        'RDS_DB_PORT',
-        'RDS_DB_NAME',
-        'RDS_DB_USER',
-        'AWS_REGION'
+        "RDS_DB_HOST",
+        "RDS_DB_PORT",
+        "RDS_DB_NAME",
+        "RDS_DB_USER",
+        "AWS_REGION",
     ]
 
     missing = [var for var in required_vars if var not in os.environ]
@@ -54,11 +54,11 @@ def load_environment_variables() -> Tuple[str, int, str, str, str, str]:
             "Please ensure .env file is loaded or variables are set."
         )
 
-    host = os.environ['RDS_DB_HOST']
-    port = int(os.environ['RDS_DB_PORT'])
-    database = os.environ['RDS_DB_NAME']
-    user = os.environ['RDS_DB_USER']
-    region = os.environ['AWS_REGION']
+    host = os.environ["RDS_DB_HOST"]
+    port = int(os.environ["RDS_DB_PORT"])
+    database = os.environ["RDS_DB_NAME"]
+    user = os.environ["RDS_DB_USER"]
+    region = os.environ["AWS_REGION"]
 
     return host, port, database, user, region, database
 
@@ -80,12 +80,9 @@ def generate_iam_auth_token(host: str, port: int, user: str, region: str) -> str
         Exception: If token generation fails
     """
     try:
-        client = boto3.client('rds', region_name=region)
+        client = boto3.client("rds", region_name=region)
         token = client.generate_db_auth_token(
-            DBHostname=host,
-            Port=port,
-            DBUsername=user,
-            Region=region
+            DBHostname=host, Port=port, DBUsername=user, Region=region
         )
         logger.debug(f"Generated IAM token for {user}@{host}:{port}")
         return token
@@ -127,7 +124,7 @@ def connect_to_rds() -> Optional[psycopg2.extensions.connection]:
             database=database,
             user=user,
             password=auth_token,
-            sslmode='require'
+            sslmode="require",
         )
         conn.autocommit = True
         logger.info("✓ Connected successfully to RDS")
@@ -155,7 +152,7 @@ def test_connection() -> bool:
             return False
 
         cur = conn.cursor()
-        cur.execute('SELECT version();')
+        cur.execute("SELECT version();")
         version = cur.fetchone()[0]
         logger.info(f"✓ Database version: {version}")
         cur.close()
@@ -169,16 +166,17 @@ def test_connection() -> bool:
             conn.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Setup logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Load environment variables from .env file
     try:
         from dotenv import load_dotenv
+
         load_dotenv()
     except ImportError:
         logger.warning("python-dotenv not installed. Ensure env vars are set.")

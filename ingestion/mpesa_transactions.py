@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TransactionData:
     """M-Pesa transaction data model"""
+
     transaction_id: str
     transaction_type: str  # C2B, B2C, B2B, etc.
     amount: float
@@ -41,9 +42,9 @@ class MpesaTransactionHandler:
     def __init__(self):
         """Initialize transaction handler"""
         self.api_client = DarajaClient.from_env()
-        self.business_shortcode = os.environ.get('MPESA_BUSINESS_SHORTCODE', '')
-        self.till_number = os.environ.get('MPESA_TILL_NUMBER', '')
-        self.passkey = os.environ.get('MPESA_PASSKEY', '')
+        self.business_shortcode = os.environ.get("MPESA_BUSINESS_SHORTCODE", "")
+        self.till_number = os.environ.get("MPESA_TILL_NUMBER", "")
+        self.passkey = os.environ.get("MPESA_PASSKEY", "")
 
         if not self.business_shortcode:
             logger.warning("MPESA_BUSINESS_SHORTCODE not configured")
@@ -52,8 +53,8 @@ class MpesaTransactionHandler:
         self,
         amount: float,
         phone_number: str,
-        transaction_type: str = 'CustomerPayBillOnline',
-        reference: str = '',
+        transaction_type: str = "CustomerPayBillOnline",
+        reference: str = "",
     ) -> Dict[str, Any]:
         """
         Initiate C2B (Customer to Business) transaction
@@ -75,15 +76,15 @@ class MpesaTransactionHandler:
                 command_id=transaction_type,
                 amount=int(amount),
                 msisdn=phone_number,
-                bill_ref_number=reference or 'REF001',
+                bill_ref_number=reference or "REF001",
             )
 
             # Log transaction
             self._log_transaction(
-                transaction_type='C2B',
+                transaction_type="C2B",
                 amount=amount,
                 phone_number=phone_number,
-                status='initiated',
+                status="initiated",
                 response_data=response,
             )
 
@@ -109,9 +110,9 @@ class MpesaTransactionHandler:
             # This would require initiator credentials and security credential
             # Implementation depends on your security setup
             response = {
-                'transaction_id': transaction_id,
-                'status': 'completed',
-                'timestamp': datetime.now().isoformat(),
+                "transaction_id": transaction_id,
+                "status": "completed",
+                "timestamp": datetime.now().isoformat(),
             }
 
             return response
@@ -141,6 +142,7 @@ class MpesaTransactionHandler:
                 """
 
                 import json
+
                 cur.execute(
                     query,
                     (
@@ -149,7 +151,7 @@ class MpesaTransactionHandler:
                         phone_number,
                         status,
                         json.dumps(response_data),
-                    )
+                    ),
                 )
                 conn.commit()
                 logger.debug(f"✓ Transaction logged: {transaction_type}")
@@ -176,10 +178,10 @@ class WebhookProcessor:
             logger.info(f"Processing C2B confirmation: {payload.get('TransID')}")
 
             # Extract transaction data
-            transaction_id = payload.get('TransID')
-            phone_number = payload.get('MSISDN')
-            amount = payload.get('TransAmount')
-            account_ref = payload.get('BillRefNumber')
+            transaction_id = payload.get("TransID")
+            phone_number = payload.get("MSISDN")
+            amount = payload.get("TransAmount")
+            account_ref = payload.get("BillRefNumber")
 
             # Log to database
             with get_pooled_connection() as conn:
@@ -197,17 +199,18 @@ class WebhookProcessor:
                 """
 
                 import json
+
                 cur.execute(
                     query,
                     (
                         transaction_id,
-                        'C2B',
+                        "C2B",
                         phone_number,
                         amount,
                         account_ref,
-                        'confirmed',
+                        "confirmed",
                         json.dumps(payload),
-                    )
+                    ),
                 )
                 conn.commit()
                 logger.info(f"✓ C2B confirmation processed: {transaction_id}")
@@ -243,14 +246,15 @@ class WebhookProcessor:
                 """
 
                 import json
+
                 cur.execute(
                     query,
                     (
-                        payload.get('ConversationID'),
-                        'B2C',
-                        payload.get('ResultCode') == 0 and 'completed' or 'failed',
+                        payload.get("ConversationID"),
+                        "B2C",
+                        payload.get("ResultCode") == 0 and "completed" or "failed",
                         json.dumps(payload),
-                    )
+                    ),
                 )
                 conn.commit()
                 logger.info(f"✓ B2C result processed")
@@ -261,10 +265,10 @@ class WebhookProcessor:
             return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Example: Initiate a transaction

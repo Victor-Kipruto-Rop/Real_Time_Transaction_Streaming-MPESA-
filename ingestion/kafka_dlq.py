@@ -83,9 +83,9 @@ class DeadLetterQueueHandler:
         try:
             self.dlq_producer = KafkaProducer(
                 bootstrap_servers=self.kafka_brokers,
-                value_serializer=lambda v: v.encode("utf-8")
-                if isinstance(v, str)
-                else v,
+                value_serializer=lambda v: (
+                    v.encode("utf-8") if isinstance(v, str) else v
+                ),
                 acks="all",  # Wait for all replicas
                 retries=3,
                 max_in_flight_requests_per_connection=1,  # Ensure ordering
@@ -172,9 +172,9 @@ class DeadLetterQueueHandler:
                 error_type=dlq_message.failure_reason.value,
                 error_message=dlq_message.error_message,
                 error_stacktrace=dlq_message.error_stacktrace,
-                recovery_status="pending"
-                if dlq_message.is_recoverable
-                else "unrecoverable",
+                recovery_status=(
+                    "pending" if dlq_message.is_recoverable else "unrecoverable"
+                ),
                 metadata={
                     "original_topic": dlq_message.original_topic,
                     "retry_count": dlq_message.retry_count,
