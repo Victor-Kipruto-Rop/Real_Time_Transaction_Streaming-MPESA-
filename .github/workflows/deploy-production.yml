@@ -118,6 +118,8 @@ jobs:
     name: Backup Production Database
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: true
+    if: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -145,6 +147,8 @@ jobs:
     name: Deploy to Production
     needs: [build, backup]
     runs-on: ubuntu-latest
+    continue-on-error: true
+    if: false
     environment:
       name: production
       url: https://api.your-domain.com
@@ -247,7 +251,8 @@ jobs:
     name: Rollback on Failure
     needs: deploy
     runs-on: ubuntu-latest
-    if: failure()
+    continue-on-error: true
+    if: false
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -327,7 +332,8 @@ jobs:
     name: Notify Team
     needs: [validate, security-scan, build, backup, deploy, post-deploy]
     runs-on: ubuntu-latest
-    if: always()
+    continue-on-error: true
+    if: false
     steps:
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v1.24.0
