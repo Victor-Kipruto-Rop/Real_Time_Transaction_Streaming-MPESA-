@@ -17,23 +17,24 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  DEPLOY_VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Validate version tag
+      - name: Validate version format
         run: |
-          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version tag format. Expected: v1.0.0"
+          if [[ ! "${{ env.DEPLOY_VERSION }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format: ${{ env.DEPLOY_VERSION }}. Expected format: v1.0.0"
             exit 1
           fi
 
@@ -111,7 +112,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ env.DEPLOY_VERSION }}
             COMMIT_SHA=${{ github.sha }}
 
       - name: Sign container images
@@ -124,13 +125,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
+    if: always() && secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -153,7 +154,7 @@ jobs:
     needs: [build, backup]
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
+    if: always() && secrets.AWS_ACCESS_KEY_ID != ''
     environment:
       name: production
       url: https://api.your-domain.com
@@ -162,7 +163,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -225,7 +226,7 @@ jobs:
       - name: Run database migrations
         run: |
           kubectl run dbt-migrate-prod-${{ github.run_number }} \
-            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dbt:${{ github.ref_name }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dbt:${{ env.DEPLOY_VERSION }} \
             --restart=Never \
             --namespace=mpesa-production \
             --command -- dbt run --target production
@@ -248,19 +249,19 @@ jobs:
       - name: Update deployment tags
         run: |
           kubectl label deployment webhook-receiver -n mpesa-production \
-            version=${{ github.ref_name }} --overwrite
+            version=${{ env.DEPLOY_VERSION }} --overwrite
           kubectl label deployment kafka-consumer -n mpesa-production \
-            version=${{ github.ref_name }} --overwrite
+            version=${{ env.DEPLOY_VERSION }} --overwrite
 
   rollback:
     name: Rollback on Failure
     needs: deploy
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
+    if: failure() && secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -311,7 +312,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "text": "Production deployment: ${{ github.ref_name }}",
+              "text": "Production deployment: ${{ env.DEPLOY_VERSION }}",
               "tags": ["deployment", "production"],
               "time": '$(($(date +%s) * 1000))'
             }'
@@ -321,8 +322,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
+          tag_name: ${{ env.DEPLOY_VERSION }}
+          release_name: Release ${{ env.DEPLOY_VERSION }}
           body: |
             ## Changes in this Release
             
@@ -340,10 +341,10 @@ jobs:
     needs: [validate, security-scan, build, backup, deploy, post-deploy]
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: false
+    if: always() && secrets.SLACK_WEBHOOK_URL != ''
     steps:
       - name: Send Slack notification
-        uses: slackapi/slack-github-action@v1.24.0
+        uses: slackapi/slack-github-action@v2
         with:
           payload: |
             {
@@ -365,7 +366,7 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Version:*\n${{ github.ref_name }}"
+                      "text": "*Version:*\n${{ env.DEPLOY_VERSION }}"
                     },
                     {
                       "type": "mrkdwn",
@@ -407,5 +408,5 @@ jobs:
         if: needs.deploy.result == 'success'
         run: |
           # Send email to stakeholders
-          echo "Production deployment successful: ${{ github.ref_name }}" | \
+          echo "Production deployment successful: ${{ env.DEPLOY_VERSION }}" | \
             mail -s "Production Deployment Success" stakeholders@your-domain.com

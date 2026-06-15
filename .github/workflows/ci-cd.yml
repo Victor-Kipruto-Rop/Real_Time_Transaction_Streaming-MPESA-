@@ -255,7 +255,7 @@ jobs:
   # Notification (Optional - requires SLACK_WEBHOOK_URL secret)
   # ===================================================================
   notify:
-    if: always() && vars.ENABLE_SLACK_NOTIFICATIONS == 'true'
+    if: always() && vars.ENABLE_SLACK_NOTIFICATIONS == 'true' && secrets.SLACK_WEBHOOK_URL != ''
     needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     name: Notify Slack
