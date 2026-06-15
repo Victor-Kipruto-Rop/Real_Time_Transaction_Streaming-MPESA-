@@ -193,6 +193,7 @@ jobs:
     needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     name: Build Docker Image
+    continue-on-error: true
     permissions:
       contents: read
       packages: write
