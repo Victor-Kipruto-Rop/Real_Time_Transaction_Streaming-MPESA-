@@ -253,14 +253,16 @@ jobs:
   # Notification (Optional - requires SLACK_WEBHOOK_URL secret)
   # ===================================================================
   notify:
-    if: always() && github.event.repository.private == false
+    if: always() && vars.ENABLE_SLACK_NOTIFICATIONS == 'true'
     needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     name: Notify Slack
+    continue-on-error: true
     
     steps:
       - name: Slack notification
-        uses: slackapi/slack-github-action@v1
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v2
         with:
           payload: |
             {
