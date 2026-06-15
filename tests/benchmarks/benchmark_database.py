@@ -310,7 +310,7 @@ class DatabaseBenchmark:
             start = time.time()
 
             cursor.execute("""
-                SELECT 
+                SELECT
                     phone_number,
                     COUNT(*) as transaction_count,
                     SUM(amount) as total_amount,

@@ -67,7 +67,7 @@ class DatabaseQueries:
     def get_transaction_by_id(transaction_id: str) -> Optional[Dict]:
         """Get single transaction by ID (index-optimized)"""
         query = """
-        SELECT * FROM stg_c2b_transactions 
+        SELECT * FROM stg_c2b_transactions
         WHERE transaction_id = %s
         LIMIT 1
         """
@@ -77,7 +77,7 @@ class DatabaseQueries:
     def get_transactions_by_phone(phone_number: str, limit: int = 100) -> List[Dict]:
         """Get transactions for a customer (index-optimized)"""
         query = """
-        SELECT * FROM stg_c2b_transactions 
+        SELECT * FROM stg_c2b_transactions
         WHERE customer_phone_number = %s
         ORDER BY transaction_date DESC
         LIMIT %s
@@ -91,7 +91,7 @@ class DatabaseQueries:
     def get_daily_summary(transaction_date: str) -> List[Dict]:
         """Get daily transaction summary (pre-aggregated table)"""
         query = """
-        SELECT * FROM mart_daily_transactions 
+        SELECT * FROM mart_daily_transactions
         WHERE transaction_date = %s
         ORDER BY total_transaction_value DESC
         """
@@ -104,7 +104,7 @@ class DatabaseQueries:
     def get_heatmap_data(transaction_date: str) -> List[Dict]:
         """Get county heatmap data (pre-aggregated)"""
         query = """
-        SELECT * FROM mart_county_heatmap 
+        SELECT * FROM mart_county_heatmap
         WHERE transaction_date = %s
         ORDER BY transaction_count DESC
         """
@@ -117,14 +117,14 @@ class DatabaseQueries:
     def get_transaction_statistics(start_date: str, end_date: str) -> Optional[Dict]:
         """Get aggregated transaction statistics"""
         query = """
-        SELECT 
+        SELECT
             COUNT(*) as total_transactions,
             SUM(transaction_amount) as total_amount,
             AVG(transaction_amount) as avg_amount,
             MIN(transaction_amount) as min_amount,
             MAX(transaction_amount) as max_amount,
             COUNT(DISTINCT customer_phone_number) as unique_customers
-        FROM stg_c2b_transactions 
+        FROM stg_c2b_transactions
         WHERE transaction_date BETWEEN %s AND %s
         """
         return DatabaseQueries.execute_query(
@@ -135,12 +135,12 @@ class DatabaseQueries:
     def get_top_merchants(limit: int = 10) -> List[Dict]:
         """Get top merchants by transaction count"""
         query = """
-        SELECT 
+        SELECT
             account_reference,
             COUNT(*) as transaction_count,
             SUM(transaction_amount) as total_amount,
             AVG(transaction_amount) as avg_amount
-        FROM stg_c2b_transactions 
+        FROM stg_c2b_transactions
         GROUP BY account_reference
         ORDER BY transaction_count DESC
         LIMIT %s
@@ -151,11 +151,11 @@ class DatabaseQueries:
     def get_hourly_trend(transaction_date: str) -> List[Dict]:
         """Get hourly transaction trend"""
         query = """
-        SELECT 
+        SELECT
             DATE_TRUNC('hour', transaction_date)::timestamp as hour,
             COUNT(*) as transaction_count,
             SUM(transaction_amount) as total_amount
-        FROM stg_c2b_transactions 
+        FROM stg_c2b_transactions
         WHERE transaction_date::date = %s::date
         GROUP BY DATE_TRUNC('hour', transaction_date)
         ORDER BY hour ASC
@@ -228,7 +228,7 @@ class IndexRecommendations:
             unique_str = "UNIQUE " if idx_config["unique"] else ""
 
             query = f"""
-            CREATE INDEX IF NOT EXISTS {idx_name} 
+            CREATE INDEX IF NOT EXISTS {idx_name}
             ON {table} ({col_list});
             """
 
@@ -246,7 +246,7 @@ class IndexRecommendations:
     def get_index_status():
         """Get current index status and recommendations"""
         query = """
-        SELECT 
+        SELECT
             tablename,
             indexname,
             indexdef

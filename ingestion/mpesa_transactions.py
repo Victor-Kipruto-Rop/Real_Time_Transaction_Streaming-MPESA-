@@ -136,7 +136,7 @@ class MpesaTransactionHandler:
 
                 query = """
                     INSERT INTO stg_mpesa_raw (
-                        transaction_type, amount, phone_number, 
+                        transaction_type, amount, phone_number,
                         status, api_response, created_at
                     ) VALUES (%s, %s, %s, %s, %s, NOW())
                 """
