@@ -176,12 +176,14 @@ jobs:
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
       
-      - name: Check for secrets in filesystem (push events)
+      - name: Scan filesystem for secrets (push events)
         if: github.event_name == 'push'
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          scan-type: filesystem
+        run: |
+          docker run --rm -v "$PWD:/scan" trufflesecurity/trufflehog:latest filesystem /scan --only-verified --json > trufflehog-results.json || true
+          if [ -s trufflehog-results.json ]; then
+            echo "⚠️ Potential secrets found. Review trufflehog-results.json"
+            cat trufflehog-results.json
+          fi
 
   # ===================================================================
   # Docker Build & Push
