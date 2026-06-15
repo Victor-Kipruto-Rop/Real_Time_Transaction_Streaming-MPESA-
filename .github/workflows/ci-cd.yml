@@ -253,7 +253,7 @@ jobs:
   # Notification (Optional - requires SLACK_WEBHOOK_URL secret)
   # ===================================================================
   notify:
-    if: always() && secrets.SLACK_WEBHOOK_URL != ''
+    if: always() && github.event.repository.private == false
     needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     name: Notify Slack
