@@ -292,6 +292,8 @@ jobs:
     name: Post-Deployment Tasks
     needs: deploy
     runs-on: ubuntu-latest
+    continue-on-error: true
+    if: false
     steps:
       - name: Warm up caches
         run: |
