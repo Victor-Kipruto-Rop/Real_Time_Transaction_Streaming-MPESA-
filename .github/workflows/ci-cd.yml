@@ -125,9 +125,7 @@ jobs:
       
       - name: Setup PostgreSQL test database
         run: |
-          PGPASSWORD=test_password psql -h localhost -U test_user -d mpesa_test -c "CREATE EXTENSION IF NOT EXISTS json;"
-        env:
-          PGPASSWORD: test_password
+          echo "PostgreSQL test database ready (JSON support is built-in)"
       
       - name: Run pytest with coverage
         run: |
