@@ -11,12 +11,13 @@ Handles M-Pesa transaction flows:
 
 import os
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from ingestion.daraja_client import DarajaClient
 from ingestion.db_pool import get_pooled_connection
+from ingestion.db_cache import cached_query
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ class MpesaTransactionHandler:
 
                 query = """
                     INSERT INTO stg_mpesa_raw (
-                        transaction_type, amount, phone_number,
+                        transaction_type, amount, phone_number, 
                         status, api_response, created_at
                     ) VALUES (%s, %s, %s, %s, %s, NOW())
                 """

@@ -8,7 +8,7 @@ import time
 import statistics
 import requests
 import json
-from typing import Dict
+from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 
@@ -79,10 +79,10 @@ class APIBenchmark:
             payload = {
                 "TransID": f"TXN{i:010d}",
                 "TransAmount": str(random.uniform(100, 10000)),
-                "MSISDN": f"25471234{i % 10000:04d}",
-                "AccountReference": f"ACC{i % 100:03d}",
+                "MSISDN": f"25471234{i%10000:04d}",
+                "AccountReference": f"ACC{i%100:03d}",
                 "TransTime": "20260613120000",
-                "BillRefNumber": f"BILL{i % 100:03d}",
+                "BillRefNumber": f"BILL{i%100:03d}",
                 "FirstName": "John",
                 "LastName": "Doe",
             }
@@ -139,8 +139,8 @@ class APIBenchmark:
             payload = {
                 "TransID": f"TXN{request_id:010d}",
                 "TransAmount": str(random.uniform(100, 10000)),
-                "MSISDN": f"25471234{request_id % 10000:04d}",
-                "AccountReference": f"ACC{request_id % 100:03d}",
+                "MSISDN": f"25471234{request_id%10000:04d}",
+                "AccountReference": f"ACC{request_id%100:03d}",
                 "TransTime": "20260613120000",
             }
 

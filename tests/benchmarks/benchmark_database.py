@@ -7,7 +7,8 @@ Tests PostgreSQL query performance and connection pooling.
 import time
 import statistics
 import psycopg2
-from typing import Dict
+from psycopg2 import pool
+from typing import Dict, List
 import random
 import json
 
@@ -146,7 +147,7 @@ class DatabaseBenchmark:
                 INSERT INTO benchmark_test (transaction_id, amount, phone_number)
                 VALUES (%s, %s, %s)
             """,
-                (f"TXN{i:010d}", random.uniform(100, 10000), f"25471234{i % 10000:04d}"),
+                (f"TXN{i:010d}", random.uniform(100, 10000), f"25471234{i%10000:04d}"),
             )
 
             conn.commit()
@@ -208,7 +209,7 @@ class DatabaseBenchmark:
                     (
                         f"TXN{record_num:010d}",
                         random.uniform(100, 10000),
-                        f"25471234{record_num % 10000:04d}",
+                        f"25471234{record_num%10000:04d}",
                     )
                 )
 
@@ -309,7 +310,7 @@ class DatabaseBenchmark:
             start = time.time()
 
             cursor.execute("""
-                SELECT
+                SELECT 
                     phone_number,
                     COUNT(*) as transaction_count,
                     SUM(amount) as total_amount,

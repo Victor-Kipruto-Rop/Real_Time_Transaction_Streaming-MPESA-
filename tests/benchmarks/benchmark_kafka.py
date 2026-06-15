@@ -6,10 +6,11 @@ Tests Kafka producer and consumer throughput and latency.
 
 import time
 import statistics
-from typing import Dict
+from typing import List, Dict
 from kafka import KafkaProducer, KafkaConsumer
 from kafka.admin import KafkaAdminClient, NewTopic
 import json
+import pytest
 
 
 class KafkaBenchmark:
@@ -27,7 +28,7 @@ class KafkaBenchmark:
         try:
             admin.delete_topics([self.topic])
             time.sleep(2)
-        except BaseException:
+        except:
             pass
 
         # Create topic
@@ -40,7 +41,7 @@ class KafkaBenchmark:
         admin = KafkaAdminClient(bootstrap_servers=self.bootstrap_servers)
         try:
             admin.delete_topics([self.topic])
-        except BaseException:
+        except:
             pass
 
     def benchmark_producer_throughput(self, num_messages: int = 10000) -> Dict:
