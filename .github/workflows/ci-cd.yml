@@ -240,10 +240,10 @@ jobs:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
 
   # ===================================================================
-  # Notification
+  # Notification (Optional - requires SLACK_WEBHOOK_URL secret)
   # ===================================================================
   notify:
-    if: always()
+    if: always() && secrets.SLACK_WEBHOOK_URL != ''
     needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     name: Notify Slack
