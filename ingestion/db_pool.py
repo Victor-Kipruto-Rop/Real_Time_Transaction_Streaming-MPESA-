@@ -14,8 +14,6 @@ Features:
 import os
 import logging
 import psycopg2
-from psycopg2 import pool
-from typing import Optional
 from ingestion.rds_connection import generate_iam_auth_token, load_environment_variables
 
 logger = logging.getLogger(__name__)
