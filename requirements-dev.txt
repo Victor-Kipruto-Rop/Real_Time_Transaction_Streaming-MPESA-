@@ -1,0 +1,36 @@
+# Development Dependencies
+# Extends requirements.txt with testing and development tools
+
+# Include base requirements
+-r requirements.txt
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+locust==2.17.0
+
+# Code Quality
+black==23.11.0
+flake8==6.1.0
+pylint==3.0.2
+mypy==1.7.1
+isort==5.12.0
+
+# Security
+bandit==1.7.5
+safety==2.3.5
+
+# Documentation
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
+
+# Development Tools
+ipython==8.18.1
+ipdb==0.13.13
+pre-commit==3.5.0
+
+# Performance Testing
+memory-profiler==0.61.0
+py-spy==0.3.14
