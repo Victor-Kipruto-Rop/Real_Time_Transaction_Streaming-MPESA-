@@ -230,3 +230,28 @@ if __name__ == "__main__":
 
     # Close
     producer.close()
+
+
+class KafkaProducerClient:
+    """Backward-compatible kafka-python producer client used by legacy tests."""
+
+    def __init__(self, bootstrap_servers: str = "localhost:9092", topic: str = "mpesa-transactions"):
+        self.bootstrap_servers = bootstrap_servers
+        self.topic = topic
+        from kafka import KafkaProducer  # Local import to keep optional dependency behavior
+
+        self._producer = KafkaProducer(
+            bootstrap_servers=bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
+
+    def send_transaction(self, transaction: Dict[str, Any], topic: Optional[str] = None):
+        return self._producer.send(topic or self.topic, transaction)
+
+    def send_batch(self, transactions: list, topic: Optional[str] = None) -> list:
+        target_topic = topic or self.topic
+        return [self._producer.send(target_topic, transaction) for transaction in transactions]
+
+    def close(self) -> None:
+        self._producer.flush()
+        self._producer.close()

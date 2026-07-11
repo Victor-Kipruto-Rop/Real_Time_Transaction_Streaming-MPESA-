@@ -312,6 +312,43 @@ class MpesaKafkaConsumer:
             return {}
 
 
+class KafkaConsumerClient:
+    """Backward-compatible kafka-python consumer client used by legacy tests."""
+
+    def __init__(
+        self,
+        bootstrap_servers: str = "localhost:9092",
+        topic: str = "mpesa-transactions",
+        group_id: str = "mpesa_consumer_group",
+    ):
+        from kafka import KafkaConsumer  # Local import to keep optional dependency behavior
+
+        self._consumer = KafkaConsumer(
+            topic,
+            bootstrap_servers=bootstrap_servers,
+            group_id=group_id,
+            auto_offset_reset="earliest",
+            enable_auto_commit=True,
+        )
+
+    def consume(self, max_messages: Optional[int] = None):
+        count = 0
+        for message in self._consumer:
+            if max_messages is not None and count >= max_messages:
+                break
+            payload = message.value
+            if isinstance(payload, bytes):
+                payload = payload.decode("utf-8")
+            yield json.loads(payload)
+            count += 1
+
+    def commit(self) -> None:
+        self._consumer.commit()
+
+    def close(self) -> None:
+        self._consumer.close()
+
+
 # Backward compatibility: keep the function-based API
 def run_consumer(config: ConsumerConfig, max_messages: Optional[int] = None) -> int:
     """Run consumer using function-based API (for backward compatibility)."""
