@@ -335,6 +335,33 @@ class KafkaMetrics:
         return 0 if consumer is not None else None
 
 
+class WebhookMetrics:
+    """Backward-compatible webhook metrics collector."""
+
+    _total_requests = 0
+    _error_count = 0
+    _durations = []
+
+    @classmethod
+    def record_request(cls, status_code: int, duration: float = 0.0) -> None:
+        cls._total_requests += 1
+        cls._durations.append(duration)
+        if status_code >= 400:
+            cls._error_count += 1
+
+    def get_stats(self):
+        avg = (
+            sum(self._durations) / len(self._durations)
+            if self._durations
+            else 0.0
+        )
+        return {
+            "total_requests": self._total_requests,
+            "error_count": self._error_count,
+            "avg_response_time": avg,
+        }
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     collector = get_metrics_collector()

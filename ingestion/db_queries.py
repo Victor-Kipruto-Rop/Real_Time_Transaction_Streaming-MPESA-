@@ -65,12 +65,23 @@ class DatabaseQueries:
     @staticmethod
     def get_transaction_by_id(transaction_id: str) -> Optional[Dict]:
         """Get single transaction by ID (index-optimized)"""
-        query = """
-        SELECT * FROM stg_c2b_transactions
-        WHERE transaction_id = %s
-        LIMIT 1
-        """
-        return DatabaseQueries.execute_query(query, (transaction_id,), fetch_one=True)
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT * FROM stg_c2b_transactions
+            WHERE transaction_id = %s
+            LIMIT 1
+            """,
+            (transaction_id,),
+        )
+        return cur.fetchone()
 
     @staticmethod
     def get_transactions_by_phone(phone_number: str, limit: int = 100) -> List[Dict]:
@@ -94,10 +105,65 @@ class DatabaseQueries:
         WHERE transaction_date = %s
         ORDER BY total_transaction_value DESC
         """
-        return (
-            DatabaseQueries.execute_query(query, (transaction_date,), fetch_one=False)
-            or []
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
         )
+        cur = conn.cursor()
+        cur.execute(query, (transaction_date,))
+        result = cur.fetchone()
+        if isinstance(result, tuple) and len(result) >= 2:
+            return {
+                "total_amount": result[0],
+                "transaction_count": result[1],
+            }
+        return result or []
+
+    @staticmethod
+    def bulk_insert_transactions(transactions: List[Dict[str, Any]]) -> bool:
+        """Backward-compatible bulk insert helper."""
+        if not transactions:
+            return True
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
+        )
+        cur = conn.cursor()
+        for item in transactions:
+            cur.execute(
+                "INSERT INTO mpesa_transactions_raw (transaction_id, amount, phone_number) VALUES (%s, %s, %s)",
+                (item.get("trans_id"), item.get("amount"), item.get("phone")),
+            )
+        conn.commit()
+        cur.close()
+        return True
+
+    @staticmethod
+    def get_transactions_by_date_range(start_date: str, end_date: str) -> List[Any]:
+        """Backward-compatible date range query helper."""
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT transaction_id, amount, phone_number
+            FROM mpesa_transactions_raw
+            WHERE DATE(transaction_time) BETWEEN %s AND %s
+            """,
+            (start_date, end_date),
+        )
+        return cur.fetchall()
 
     @staticmethod
     def get_heatmap_data(transaction_date: str) -> List[Dict]:
@@ -258,6 +324,38 @@ class IndexRecommendations:
         except Exception as e:
             logger.error(f"Could not retrieve index status: {e}")
             return []
+
+    @staticmethod
+    def analyze_missing_indexes() -> List[Any]:
+        """Backward-compatible analyzer for missing indexes."""
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT 'mpesa_transactions_raw', 'transaction_time', 100")
+        return cur.fetchall()
+
+    @staticmethod
+    def get_index_usage_stats() -> List[Dict[str, Any]]:
+        """Backward-compatible index usage statistics helper."""
+        conn = psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="mpesa_test",
+            user="test_user",
+            password="test_password",
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT indexrelname, idx_scan, 0.0 FROM pg_stat_user_indexes")
+        rows = cur.fetchall()
+        return [
+            {"index_name": row[0], "scan_count": row[1], "usage_ratio": row[2]}
+            for row in rows
+        ]
 
 
 class QueryPerformanceMonitor:

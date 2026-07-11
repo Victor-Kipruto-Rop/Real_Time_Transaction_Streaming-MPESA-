@@ -30,6 +30,13 @@ class DatabasePool:
         min_connections: int = 2,
         max_connections: int = 10,
         use_iam_auth: bool = False,
+        minconn: int = None,
+        maxconn: int = None,
+        host: str = None,
+        port: int = None,
+        database: str = None,
+        user: str = None,
+        password: str = None,
     ):
         """
         Initialize database connection pool.
@@ -39,9 +46,16 @@ class DatabasePool:
             max_connections: Maximum pool size
             use_iam_auth: Use AWS RDS IAM authentication
         """
-        self.min_connections = min_connections
-        self.max_connections = max_connections
+        self.min_connections = minconn if minconn is not None else min_connections
+        self.max_connections = maxconn if maxconn is not None else max_connections
         self.use_iam_auth = use_iam_auth
+        self._explicit_config = {
+            "host": host,
+            "port": port,
+            "database": database,
+            "user": user,
+            "password": password,
+        }
         self._init_pool()
 
     def _init_pool(self):
@@ -54,11 +68,11 @@ class DatabasePool:
                 logger.info(f"Using AWS RDS IAM authentication for {user}@{host}")
             else:
                 # Local PostgreSQL or standard credentials
-                host = os.environ.get("POSTGRES_HOST", "localhost")
-                port = int(os.environ.get("POSTGRES_PORT", "5432"))
-                database = os.environ.get("POSTGRES_DB", "mpesa_analytics")
-                user = os.environ.get("POSTGRES_USER", "data_engineer")
-                password = os.environ.get("POSTGRES_PASSWORD", "change_me")
+                host = self._explicit_config["host"] or os.environ.get("POSTGRES_HOST", "localhost")
+                port = self._explicit_config["port"] or int(os.environ.get("POSTGRES_PORT", "5432"))
+                database = self._explicit_config["database"] or os.environ.get("POSTGRES_DB", "mpesa_analytics")
+                user = self._explicit_config["user"] or os.environ.get("POSTGRES_USER", "data_engineer")
+                password = self._explicit_config["password"] or os.environ.get("POSTGRES_PASSWORD", "change_me")
                 logger.info(f"Using PostgreSQL connection to {user}@{host}:{port}")
 
             self._pool = psycopg2.pool.SimpleConnectionPool(
@@ -112,6 +126,13 @@ class DatabasePool:
         if self._pool:
             self._pool.closeall()
             logger.info("✓ All connections closed")
+
+    # Backward-compatible method names
+    def return_connection(self, conn):
+        self.release_connection(conn)
+
+    def close(self):
+        self.close_all()
 
     @staticmethod
     def get_instance(

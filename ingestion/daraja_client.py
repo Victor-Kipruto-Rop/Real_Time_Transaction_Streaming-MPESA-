@@ -180,6 +180,10 @@ class DarajaClient:
             logger.error(f"Failed to get access token: {str(e)}")
             raise
 
+    def authenticate(self) -> Dict[str, str]:
+        """Backward-compatible auth helper."""
+        return {"access_token": self.get_access_token()}
+
     def _stk_password(self, timestamp: str) -> str:
         if not self.passkey:
             raise ValueError(
