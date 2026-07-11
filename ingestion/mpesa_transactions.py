@@ -40,7 +40,10 @@ class MpesaTransactionHandler:
 
     def __init__(self):
         """Initialize transaction handler"""
-        self.api_client = DarajaClient.from_env()
+        try:
+            self.api_client = DarajaClient.from_env()
+        except Exception:
+            self.api_client = None
         self.business_shortcode = os.environ.get("MPESA_BUSINESS_SHORTCODE", "")
         self.till_number = os.environ.get("MPESA_TILL_NUMBER", "")
         self.passkey = os.environ.get("MPESA_PASSKEY", "")
@@ -109,6 +112,9 @@ class MpesaTransactionHandler:
         """
         try:
             logger.info(f"Initiating C2B: {phone_number} -> KES {amount}")
+
+            if self.api_client is None:
+                raise RuntimeError("Daraja client is not configured")
 
             response = self.api_client.c2b_simulate(
                 shortcode=self.business_shortcode,

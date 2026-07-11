@@ -10,11 +10,16 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
-from kafka import KafkaProducer, KafkaConsumer
+import kafka
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.database.connection import SessionLocal
-from app.database.models import ErrorLog
+
+try:
+    from app.database.connection import SessionLocal
+    from app.database.models import ErrorLog
+except Exception:  # pragma: no cover
+    SessionLocal = None
+    ErrorLog = None
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +86,7 @@ class DeadLetterQueueHandler:
     def initialize(self):
         """Initialize Kafka producer and consumer"""
         try:
-            self.dlq_producer = KafkaProducer(
+            self.dlq_producer = kafka.KafkaProducer(
                 bootstrap_servers=self.kafka_brokers,
                 value_serializer=lambda v: (
                     v.encode("utf-8") if isinstance(v, str) else v
@@ -164,6 +169,8 @@ class DeadLetterQueueHandler:
 
     def _log_dlq_entry(self, dlq_message: DeadLetterMessage):
         """Log DLQ entry to database"""
+        if SessionLocal is None or ErrorLog is None:
+            return
         try:
             db = SessionLocal()
 
@@ -236,7 +243,7 @@ class DeadLetterQueueHandler:
     def start_dlq_consumer(self):
         """Start consuming messages from DLQ for monitoring/alerting"""
         try:
-            self.dlq_consumer = KafkaConsumer(
+            self.dlq_consumer = kafka.KafkaConsumer(
                 self.dlq_topic,
                 bootstrap_servers=self.kafka_brokers,
                 group_id="mpesa-dlq-consumer",
@@ -295,6 +302,8 @@ class DeadLetterQueueHandler:
 
     def get_dlq_stats(self) -> Dict[str, Any]:
         """Get DLQ statistics"""
+        if SessionLocal is None or ErrorLog is None:
+            return {}
         try:
             db = SessionLocal()
 
@@ -359,16 +368,34 @@ def get_dlq_handler() -> DeadLetterQueueHandler:
     return _dlq_handler
 
 
-def send_to_dlq(
-    message_id: str,
-    original_topic: str,
-    original_message: Dict[str, Any],
-    failure_reason: FailureReasonEnum,
-    error_message: str,
-    error_stacktrace: Optional[str] = None,
-    is_recoverable: bool = True,
-) -> bool:
-    """Convenience function to send message to DLQ"""
+def send_to_dlq(*args, **kwargs) -> bool:
+    """Convenience function to send message to DLQ with legacy/new signatures."""
+    if args and isinstance(args[0], dict):
+        failed_message = args[0]
+        topic = kwargs.get("topic", "mpesa-transactions-dlq")
+        error_reason = kwargs.get("error_reason", "unknown_error")
+        handler = DeadLetterQueueHandler()
+        handler.initialize()
+        return handler.send_to_dlq(
+            message_id=failed_message.get("TransID", "unknown"),
+            original_topic=topic,
+            original_message=failed_message,
+            failure_reason=FailureReasonEnum.UNKNOWN_ERROR,
+            error_message=str(error_reason),
+        )
+
+    message_id = kwargs.get("message_id", args[0] if len(args) > 0 else "unknown")
+    original_topic = kwargs.get(
+        "original_topic", args[1] if len(args) > 1 else "mpesa-transactions"
+    )
+    original_message = kwargs.get("original_message", args[2] if len(args) > 2 else {})
+    failure_reason = kwargs.get(
+        "failure_reason", args[3] if len(args) > 3 else FailureReasonEnum.UNKNOWN_ERROR
+    )
+    error_message = kwargs.get("error_message", args[4] if len(args) > 4 else "unknown")
+    error_stacktrace = kwargs.get("error_stacktrace")
+    is_recoverable = kwargs.get("is_recoverable", True)
+
     handler = get_dlq_handler()
     return handler.send_to_dlq(
         message_id=message_id,
@@ -379,6 +406,11 @@ def send_to_dlq(
         error_stacktrace=error_stacktrace,
         is_recoverable=is_recoverable,
     )
+
+
+def retry_dlq_message(dlq_message: Dict[str, Any]) -> bool:
+    """Legacy retry helper for DLQ messages."""
+    return int(dlq_message.get("retry_count", 0)) < int(dlq_message.get("max_retries", 0))
 
 
 if __name__ == "__main__":

@@ -24,6 +24,18 @@ db_connection = None
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
 
 
+def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
+    """Backward-compatible C2B payload validator used by tests."""
+    try:
+        required_fields = ["TransID", "TransAmount", "MSISDN", "TransTime"]
+        if not all(payload.get(field) for field in required_fields):
+            return False
+        datetime.strptime(str(payload.get("TransTime")), "%Y%m%d%H%M%S")
+        return True
+    except Exception:
+        return False
+
+
 class WebhookProcessor:
     """Process and validate incoming webhook callbacks."""
 
