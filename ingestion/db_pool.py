@@ -14,8 +14,6 @@ Features:
 import os
 import logging
 import psycopg2
-from psycopg2 import pool
-from typing import Optional
 from ingestion.rds_connection import generate_iam_auth_token, load_environment_variables
 
 logger = logging.getLogger(__name__)
@@ -155,5 +153,5 @@ def get_pooled_connection(use_iam_auth: bool = False):
             cur.execute('SELECT * FROM transactions')
             cur.close()
     """
-    pool = DatabasePool.get_instance(use_iam_auth=use_iam_auth)
-    return PooledConnection(pool)
+    db_pool = DatabasePool.get_instance(use_iam_auth=use_iam_auth)
+    return PooledConnection(db_pool)

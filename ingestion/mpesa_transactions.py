@@ -11,13 +11,12 @@ Handles M-Pesa transaction flows:
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from ingestion.daraja_client import DarajaClient
 from ingestion.db_pool import get_pooled_connection
-from ingestion.db_cache import cached_query
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +256,7 @@ class WebhookProcessor:
                     ),
                 )
                 conn.commit()
-                logger.info(f"✓ B2C result processed")
+                logger.info("✓ B2C result processed")
                 return True
 
         except Exception as e:

@@ -28,7 +28,7 @@ class KafkaBenchmark:
         try:
             admin.delete_topics([self.topic])
             time.sleep(2)
-        except:
+        except Exception:
             pass
 
         # Create topic
@@ -41,7 +41,7 @@ class KafkaBenchmark:
         admin = KafkaAdminClient(bootstrap_servers=self.bootstrap_servers)
         try:
             admin.delete_topics([self.topic])
-        except:
+        except Exception:
             pass
 
     def benchmark_producer_throughput(self, num_messages: int = 10000) -> Dict:

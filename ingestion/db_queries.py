@@ -11,7 +11,6 @@ Provides efficient database queries for M-Pesa analytics with:
 import time
 import logging
 from typing import List, Dict, Any, Optional
-from functools import lru_cache
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from ingestion.db_pool import get_pooled_connection
@@ -225,8 +224,6 @@ class IndexRecommendations:
             col_str = "_".join(columns)
             idx_name = f"idx_{table}_{col_str}"
             col_list = ", ".join(columns)
-            unique_str = "UNIQUE " if idx_config["unique"] else ""
-
             query = f"""
             CREATE INDEX IF NOT EXISTS {idx_name}
             ON {table} ({col_list});
