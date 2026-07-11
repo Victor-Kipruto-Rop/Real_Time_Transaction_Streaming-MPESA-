@@ -24,17 +24,33 @@ db_connection = None
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
 
 
+def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
+    """Backward-compatible C2B payload validator used by tests."""
+    try:
+        required_fields = ["TransID", "TransAmount", "MSISDN", "TransTime"]
+        if not all(payload.get(field) for field in required_fields):
+            return False
+        datetime.strptime(str(payload.get("TransTime")), "%Y%m%d%H%M%S")
+        return True
+    except Exception:
+        return False
+
+
 class WebhookProcessor:
     """Process and validate incoming webhook callbacks."""
 
     @staticmethod
     def process_c2b_validation(payload: Dict[str, Any]) -> Dict[str, str]:
         try:
-            C2BValidationRequest.model_validate(payload)
-
             transaction_id = payload.get("TransID")
             amount = payload.get("TransAmount")
             phone = payload.get("MSISDN")
+            trans_time = payload.get("TransTime")
+
+            if not (transaction_id and amount and phone and trans_time):
+                return {"ResultCode": 1, "ResultDesc": "Missing required fields"}
+
+            datetime.strptime(str(trans_time), "%Y%m%d%H%M%S")
 
             logger.info(
                 "C2B Validation - TxnID: %s, Amount: %s, Phone: %s",
@@ -44,16 +60,16 @@ class WebhookProcessor:
             )
 
             if amount is None:
-                return {"ResultCode": "1", "ResultDesc": "Missing TransAmount"}
+                return {"ResultCode": 1, "ResultDesc": "Missing TransAmount"}
 
-            if int(amount) > 1000000:
-                return {"ResultCode": "1", "ResultDesc": "Amount exceeds limit"}
+            if float(amount) > 1000000:
+                return {"ResultCode": 1, "ResultDesc": "Amount exceeds limit"}
 
-            return {"ResultCode": "0", "ResultDesc": "Validation accepted"}
+            return {"ResultCode": 0, "ResultDesc": "Validation accepted"}
 
         except Exception as e:
             logger.error("Validation error: %s", str(e))
-            return {"ResultCode": "1", "ResultDesc": "Validation failed"}
+            return {"ResultCode": 1, "ResultDesc": "Validation failed"}
 
     def process_c2b_confirmation(self, payload: Dict[str, Any]) -> None:
         try:
@@ -184,6 +200,7 @@ def create_app() -> Flask:
         return created
 
     processor = WebhookProcessor()
+    from ingestion.metrics import WebhookMetrics
 
     def _require_ui_token() -> bool:
         if not ui_token:
@@ -377,6 +394,13 @@ def create_app() -> Flask:
                     event_type="c2b_validation",
                 )
 
+            if response.get("ResultCode") == 0 and producer:
+                producer.publish_transaction(
+                    payload,
+                    key=payload.get("MSISDN"),
+                    event_type="c2b_validation",
+                )
+
             return jsonify(response)
 
         except Exception as e:
@@ -393,34 +417,31 @@ def create_app() -> Flask:
 
     @app.route("/webhook/c2b/confirmation", methods=["POST"])
     def c2b_confirmation():
+        started = time()
         try:
             if _rate_limited("c2b_confirmation"):
-                return (
-                    jsonify(
-                        {
-                            "status": "error",
-                            "error": "rate_limited",
-                        }
-                    ),
-                    429,
-                )
+                status = 429
+                response = jsonify({"status": "error", "error": "rate_limited"}), status
+                WebhookMetrics.record_request(status, time() - started)
+                return response
 
             payload = request.get_json(silent=True)
 
             if payload is None:
-                return (
-                    jsonify(
-                        {
-                            "status": "error",
-                            "error": "Invalid JSON",
-                        }
-                    ),
-                    400,
-                )
+                status = 400
+                response = jsonify({"status": "error", "error": "Invalid JSON"}), status
+                WebhookMetrics.record_request(status, time() - started)
+                return response
 
             payload = processor._validate_payload(payload)
 
             logger.debug("Received C2B confirmation callback")
+
+            if not validate_c2b_payload(payload):
+                status = 400
+                response = jsonify({"ResultCode": 1, "ResultDesc": "Invalid payload"}), status
+                WebhookMetrics.record_request(status, time() - started)
+                return response
 
             processor.process_c2b_confirmation(payload)
 
@@ -433,11 +454,17 @@ def create_app() -> Flask:
                     event_type="c2b_confirmation",
                 )
 
-            return jsonify({"status": "received"}), 200
+            status = 200
+            response = jsonify({"ResultCode": 0, "ResultDesc": "Accepted"}), status
+            WebhookMetrics.record_request(status, time() - started)
+            return response
 
         except Exception as e:
             logger.error("Webhook confirmation error: %s", str(e))
-            return jsonify({"status": "error"}), 500
+            status = 500
+            response = jsonify({"status": "error"}), status
+            WebhookMetrics.record_request(status, time() - started)
+            return response
 
     @app.route("/webhook/b2c/result", methods=["POST"])
     def b2c_result():

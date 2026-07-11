@@ -91,3 +91,13 @@ def mock_rds_iam_token():
 def docker_compose_file(pytestconfig):
     """Path to docker-compose file for integration tests"""
     return os.path.join(pytestconfig.rootdir, "docker-compose.yml")
+
+
+@pytest.fixture
+def client():
+    """Shared Flask test client fixture."""
+    from ingestion.webhook_receiver import app
+
+    app.config["TESTING"] = True
+    with app.test_client() as test_client:
+        yield test_client

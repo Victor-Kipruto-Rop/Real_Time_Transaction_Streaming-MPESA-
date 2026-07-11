@@ -147,7 +147,7 @@ class DatabaseBenchmark:
                 INSERT INTO benchmark_test (transaction_id, amount, phone_number)
                 VALUES (%s, %s, %s)
             """,
-                (f"TXN{i:010d}", random.uniform(100, 10000), f"25471234{i%10000:04d}"),
+                (f"TXN{i:010d}", random.uniform(100, 10000), f"25471234{i % 10000:04d}"),
             )
 
             conn.commit()
@@ -209,7 +209,7 @@ class DatabaseBenchmark:
                     (
                         f"TXN{record_num:010d}",
                         random.uniform(100, 10000),
-                        f"25471234{record_num%10000:04d}",
+                        f"25471234{record_num % 10000:04d}",
                     )
                 )
 

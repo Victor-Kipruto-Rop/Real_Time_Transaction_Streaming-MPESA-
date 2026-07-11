@@ -21,6 +21,7 @@ Usage:
 
 import os
 import sys
+import time
 import logging
 import psycopg2
 import boto3
@@ -39,28 +40,125 @@ def load_environment_variables() -> Tuple[str, int, str, str, str, str]:
     Raises:
         KeyError: If required environment variables are missing
     """
-    required_vars = [
-        "RDS_DB_HOST",
-        "RDS_DB_PORT",
-        "RDS_DB_NAME",
-        "RDS_DB_USER",
-        "AWS_REGION",
-    ]
+    host = os.getenv("RDS_DB_HOST") or os.getenv("POSTGRES_HOST")
+    port = os.getenv("RDS_DB_PORT") or os.getenv("POSTGRES_PORT")
+    database = os.getenv("RDS_DB_NAME") or os.getenv("POSTGRES_DB")
+    user = os.getenv("RDS_DB_USER") or os.getenv("POSTGRES_USER")
+    region = os.getenv("AWS_REGION", "us-east-1")
 
-    missing = [var for var in required_vars if var not in os.environ]
+    missing = []
+    if not host:
+        missing.append("RDS_DB_HOST/POSTGRES_HOST")
+    if not port:
+        missing.append("RDS_DB_PORT/POSTGRES_PORT")
+    if not database:
+        missing.append("RDS_DB_NAME/POSTGRES_DB")
+    if not user:
+        missing.append("RDS_DB_USER/POSTGRES_USER")
+
     if missing:
         raise KeyError(
             f"Missing required environment variables: {', '.join(missing)}\n"
             "Please ensure .env file is loaded or variables are set."
         )
 
-    host = os.environ["RDS_DB_HOST"]
-    port = int(os.environ["RDS_DB_PORT"])
-    database = os.environ["RDS_DB_NAME"]
-    user = os.environ["RDS_DB_USER"]
-    region = os.environ["AWS_REGION"]
+    return host, int(port), database, user, region, database
 
-    return host, port, database, user, region, database
+
+class RDSConnection:
+    """Backward-compatible RDS IAM-auth connection helper."""
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        user: str,
+        database: str,
+        region: str,
+        ssl_mode: str = "require",
+        max_retries: int = 1,
+        use_pool: bool = False,
+        pool_size: int = 5,
+    ):
+        self.host = host
+        self.port = port
+        self.user = user
+        self.database = database
+        self.region = region
+        self.ssl_mode = ssl_mode
+        self.max_retries = max(1, max_retries)
+        self.use_pool = use_pool
+        self.pool_size = pool_size
+        self._cached_token: Optional[str] = None
+        self._token_expired = True
+        self._pool = None
+
+    def generate_auth_token(self) -> str:
+        token = generate_iam_auth_token(self.host, self.port, self.user, self.region)
+        self._cached_token = token
+        self._token_expired = False
+        return token
+
+    def _get_token(self) -> str:
+        if self._cached_token is None or self._token_expired:
+            return self.generate_auth_token()
+        return self._cached_token
+
+    def connect(self):
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                token = self._get_token()
+                return psycopg2.connect(
+                    host=self.host,
+                    port=self.port,
+                    database=self.database,
+                    user=self.user,
+                    password=token,
+                    sslmode=self.ssl_mode,
+                )
+            except Exception as exc:
+                last_error = exc
+                self._token_expired = True
+                if attempt < self.max_retries:
+                    time.sleep(0.1)
+        raise last_error
+
+    def get_connection_pool(self):
+        if self._pool is None:
+            if not self.use_pool:
+                return None
+            token = self._get_token()
+            self._pool = psycopg2.pool.SimpleConnectionPool(
+                1,
+                self.pool_size,
+                host=self.host,
+                port=self.port,
+                database=self.database,
+                user=self.user,
+                password=token,
+                sslmode=self.ssl_mode,
+            )
+        return self._pool
+
+
+def get_rds_connection(
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    database: Optional[str] = None,
+    user: Optional[str] = None,
+    region: Optional[str] = None,
+):
+    """Create and return a connection using args or environment defaults."""
+    env_host, env_port, env_database, env_user, env_region, _ = load_environment_variables()
+    rds_connection = RDSConnection(
+        host=host or env_host,
+        port=port or env_port,
+        user=user or env_user,
+        database=database or env_database,
+        region=region or env_region,
+    )
+    return rds_connection.connect()
 
 
 def generate_iam_auth_token(host: str, port: int, user: str, region: str) -> str:

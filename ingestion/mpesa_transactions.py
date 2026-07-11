@@ -11,13 +11,12 @@ Handles M-Pesa transaction flows:
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from ingestion.daraja_client import DarajaClient
 from ingestion.db_pool import get_pooled_connection
-from ingestion.db_cache import cached_query
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +40,56 @@ class MpesaTransactionHandler:
 
     def __init__(self):
         """Initialize transaction handler"""
-        self.api_client = DarajaClient.from_env()
+        try:
+            self.api_client = DarajaClient.from_env()
+        except Exception:
+            self.api_client = None
         self.business_shortcode = os.environ.get("MPESA_BUSINESS_SHORTCODE", "")
         self.till_number = os.environ.get("MPESA_TILL_NUMBER", "")
         self.passkey = os.environ.get("MPESA_PASSKEY", "")
+        self._processed_transactions = set()
 
         if not self.business_shortcode:
             logger.warning("MPESA_BUSINESS_SHORTCODE not configured")
+
+    def validate_transaction(self, transaction: Dict[str, Any]) -> bool:
+        """Validate minimal M-Pesa transaction payload structure."""
+        try:
+            required = ["TransID", "TransAmount", "MSISDN"]
+            if not all(transaction.get(field) for field in required):
+                return False
+
+            amount = float(transaction["TransAmount"])
+            if amount <= 0:
+                return False
+
+            msisdn = str(transaction["MSISDN"])
+            return msisdn.startswith("254") and len(msisdn) == 12 and msisdn.isdigit()
+        except Exception:
+            return False
+
+    def enrich_transaction(self, transaction: Dict[str, Any]) -> Dict[str, Any]:
+        """Enrich transaction payload with derived metadata."""
+        enriched = dict(transaction)
+        enriched["timestamp"] = datetime.now().isoformat()
+        enriched["customer_name"] = " ".join(
+            part
+            for part in [
+                str(transaction.get("FirstName", "")).strip(),
+                str(transaction.get("MiddleName", "")).strip(),
+                str(transaction.get("LastName", "")).strip(),
+            ]
+            if part
+        )
+        return enriched
+
+    def is_duplicate(self, transaction_id: str) -> bool:
+        """Check if a transaction has already been marked as processed."""
+        return transaction_id in self._processed_transactions
+
+    def mark_processed(self, transaction_id: str) -> None:
+        """Mark a transaction as processed."""
+        self._processed_transactions.add(transaction_id)
 
     def initiate_c2b_transaction(
         self,
@@ -70,6 +112,9 @@ class MpesaTransactionHandler:
         """
         try:
             logger.info(f"Initiating C2B: {phone_number} -> KES {amount}")
+
+            if self.api_client is None:
+                raise RuntimeError("Daraja client is not configured")
 
             response = self.api_client.c2b_simulate(
                 shortcode=self.business_shortcode,
@@ -257,7 +302,7 @@ class WebhookProcessor:
                     ),
                 )
                 conn.commit()
-                logger.info(f"✓ B2C result processed")
+                logger.info("✓ B2C result processed")
                 return True
 
         except Exception as e:
@@ -274,3 +319,7 @@ if __name__ == "__main__":
     # Example: Initiate a transaction
     handler = MpesaTransactionHandler()
     print("✓ M-Pesa transaction handler initialized")
+
+
+# Backward-compatible alias used by legacy tests/integrations
+MPesaTransactionHandler = MpesaTransactionHandler

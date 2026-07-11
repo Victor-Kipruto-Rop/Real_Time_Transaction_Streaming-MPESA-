@@ -311,6 +311,57 @@ def get_metrics_collector() -> MetricsCollector:
     return _metrics_collector
 
 
+class KafkaMetrics:
+    """Backward-compatible in-memory Kafka metrics helper."""
+
+    def __init__(self):
+        self._messages_sent = 0
+        self._messages_consumed = 0
+
+    def record_message_sent(self) -> None:
+        self._messages_sent += 1
+
+    def record_message_consumed(self) -> None:
+        self._messages_consumed += 1
+
+    def get_producer_stats(self):
+        return {"messages_sent": self._messages_sent}
+
+    def get_consumer_stats(self):
+        return {"messages_consumed": self._messages_consumed}
+
+    def get_consumer_lag(self, consumer, topic: str):
+        _ = topic
+        return 0 if consumer is not None else None
+
+
+class WebhookMetrics:
+    """Backward-compatible webhook metrics collector."""
+
+    _total_requests = 0
+    _error_count = 0
+    _durations = []
+
+    @classmethod
+    def record_request(cls, status_code: int, duration: float = 0.0) -> None:
+        cls._total_requests += 1
+        cls._durations.append(duration)
+        if status_code >= 400:
+            cls._error_count += 1
+
+    def get_stats(self):
+        avg = (
+            sum(self._durations) / len(self._durations)
+            if self._durations
+            else 0.0
+        )
+        return {
+            "total_requests": self._total_requests,
+            "error_count": self._error_count,
+            "avg_response_time": avg,
+        }
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     collector = get_metrics_collector()

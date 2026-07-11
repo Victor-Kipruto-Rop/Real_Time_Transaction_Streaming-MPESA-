@@ -49,9 +49,9 @@ class DarajaClient:
 
     def __init__(
         self,
-        consumer_key: str,
-        consumer_secret: str,
-        business_shortcode: str,
+        consumer_key: Optional[str] = None,
+        consumer_secret: Optional[str] = None,
+        business_shortcode: Optional[str] = None,
         passkey: Optional[str] = None,
         callback_url: Optional[str] = None,
         environment: str = "sandbox",
@@ -65,10 +65,22 @@ class DarajaClient:
             business_shortcode: M-Pesa business shortcode
             environment: 'sandbox' or 'production'
         """
-        self.consumer_key = consumer_key
-        self.consumer_secret = consumer_secret
-        self.business_shortcode = business_shortcode
-        self.passkey = passkey
+        self.consumer_key = consumer_key or os.getenv("DARAJA_CONSUMER_KEY") or os.getenv(
+            "DARAJA_KEY", ""
+        )
+        self.consumer_secret = consumer_secret or os.getenv(
+            "DARAJA_CONSUMER_SECRET"
+        ) or os.getenv("DARAJA_SECRET", "")
+        self.business_shortcode = (
+            business_shortcode
+            or os.getenv("MPESA_BUSINESS_SHORTCODE")
+            or os.getenv("DARAJA_BUSINESS_SHORTCODE")
+            or os.getenv("DARAJA_SHORTCODE")
+            or os.getenv("DARAJA_C2B_SHORTCODE")
+            or os.getenv("BUSINESS_SHORTCODE")
+            or ""
+        )
+        self.passkey = passkey or os.getenv("MPESA_PASSKEY") or os.getenv("DARAJA_PASSKEY")
         self.callback_url = callback_url
         self.environment = environment
 
@@ -145,7 +157,7 @@ class DarajaClient:
         url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
 
         try:
-            response = self._session.get(
+            response = requests.get(
                 url, auth=(self.consumer_key, self.consumer_secret), timeout=10
             )
             response.raise_for_status()
@@ -167,6 +179,10 @@ class DarajaClient:
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to get access token: {str(e)}")
             raise
+
+    def authenticate(self) -> Dict[str, str]:
+        """Backward-compatible auth helper."""
+        return {"access_token": self.get_access_token()}
 
     def _stk_password(self, timestamp: str) -> str:
         if not self.passkey:
@@ -218,7 +234,7 @@ class DarajaClient:
         }
 
         try:
-            response = self._session.post(
+            response = requests.post(
                 url, json=payload, headers=headers, timeout=10
             )
             response.raise_for_status()
@@ -271,7 +287,7 @@ class DarajaClient:
         }
 
         try:
-            response = self._session.post(
+            response = requests.post(
                 url, json=payload, headers=headers, timeout=10
             )
             response.raise_for_status()
@@ -335,7 +351,7 @@ class DarajaClient:
         }
 
         try:
-            response = self._session.post(
+            response = requests.post(
                 url, json=payload, headers=headers, timeout=10
             )
             response.raise_for_status()
@@ -345,6 +361,36 @@ class DarajaClient:
         except requests.exceptions.RequestException as e:
             logger.error(f"STK push failed: {str(e)}")
             raise
+
+    def register_c2b_urls(
+        self,
+        validation_url: Optional[str] = None,
+        confirmation_url: Optional[str] = None,
+        response_type: str = "Completed",
+    ) -> Dict[str, Any]:
+        """Backward-compatible alias for URL registration."""
+        return self.c2b_register_url(
+            validation_url=validation_url,
+            confirmation_url=confirmation_url,
+            response_type=response_type,
+        )
+
+    def stk_push(
+        self,
+        phone_number: str,
+        amount: int,
+        account_reference: str = "REF123",
+        transaction_desc: str = "Payment",
+        callback_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Backward-compatible alias for STK push initiation."""
+        return self.initiate_stk_push(
+            phone_number=phone_number,
+            amount=amount,
+            account_reference=account_reference,
+            callback_url=callback_url,
+            description=transaction_desc,
+        )
 
 
 if __name__ == "__main__":

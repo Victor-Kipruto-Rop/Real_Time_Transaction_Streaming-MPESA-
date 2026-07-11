@@ -13,7 +13,6 @@ import json
 import redis
 from typing import Any, Optional, Callable
 from functools import wraps
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -231,3 +230,53 @@ class CacheInvalidationStrategy:
         """
         logger.info(f"Cache warmup scheduled every {interval_seconds}s")
         # TODO: Implement background task for cache warmup
+
+
+class QueryCache:
+    """Simple query cache with TTL and hit/miss tracking."""
+
+    def __init__(self, ttl: int = 300):
+        self.ttl = ttl
+        self._cache = {}
+        self._hits = 0
+        self._misses = 0
+
+    def _build_key(self, query: str, params: tuple = None) -> str:
+        return f"{query}:{str(params)}"
+
+    def set(self, query: str, params: tuple, result: Any) -> None:
+        key = self._build_key(query, params)
+        self._cache[key] = {"value": result, "expires": time.time() + self.ttl}
+
+    def get(self, query: str, params: tuple):
+        key = self._build_key(query, params)
+        entry = self._cache.get(key)
+
+        if not entry:
+            self._misses += 1
+            return None
+
+        if time.time() >= entry["expires"]:
+            del self._cache[key]
+            self._misses += 1
+            return None
+
+        self._hits += 1
+        return entry["value"]
+
+    def invalidate(self, query: str, params: tuple) -> None:
+        key = self._build_key(query, params)
+        self._cache.pop(key, None)
+
+    def clear(self) -> None:
+        self._cache.clear()
+
+    def get_stats(self) -> dict:
+        total = self._hits + self._misses
+        hit_rate = (self._hits / total) if total else 0
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": hit_rate,
+            "entries": len(self._cache),
+        }
