@@ -419,6 +419,10 @@ class DarajaService:
             return False
 
 
+class SafaricomService(DarajaService):
+    """Backward-compatible alias for Daraja service."""
+
+
 # Singleton instance
 daraja_service = DarajaService()
 
