@@ -7,8 +7,8 @@ groups:
       # High error rate
       - alert: HighErrorRate
         expr: |
-          rate(http_requests_total{status=~"5.."}[5m]) > 0.05
-        for: 5m
+          rate(http_requests_total{status=~"5.."}[5m]) > 0.02
+        for: 3m
         labels:
           severity: critical
           component: webhook-receiver
@@ -19,18 +19,18 @@ groups:
       # Service down
       - alert: ServiceDown
         expr: up == 0
-        for: 2m
+        for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Service {{ $labels.job }} is down"
-          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 2 minutes"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute"
 
       # High response time
       - alert: HighResponseTime
         expr: |
-          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
-        for: 10m
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
         labels:
           severity: warning
           component: webhook-receiver
@@ -41,8 +41,8 @@ groups:
       # High request rate
       - alert: HighRequestRate
         expr: |
-          rate(http_requests_total[5m]) > 200
-        for: 10m
+          rate(http_requests_total[5m]) > 150
+        for: 5m
         labels:
           severity: warning
           component: webhook-receiver
@@ -56,8 +56,8 @@ groups:
       # Kafka consumer lag
       - alert: KafkaConsumerLag
         expr: |
-          kafka_consumergroup_lag > 1000
-        for: 10m
+          kafka_consumergroup_lag > 200
+        for: 5m
         labels:
           severity: warning
           component: kafka-consumer
@@ -69,7 +69,7 @@ groups:
       - alert: KafkaBrokerDown
         expr: |
           kafka_brokers < 1
-        for: 2m
+        for: 1m
         labels:
           severity: critical
           component: kafka
@@ -95,8 +95,8 @@ groups:
       # Database connection pool exhausted
       - alert: DatabaseConnectionPoolExhausted
         expr: |
-          pg_stat_database_numbackends / pg_settings_max_connections > 0.8
-        for: 5m
+          pg_stat_database_numbackends / pg_settings_max_connections > 0.75
+        for: 3m
         labels:
           severity: warning
           component: postgresql
@@ -107,8 +107,8 @@ groups:
       # Slow queries
       - alert: SlowQueries
         expr: |
-          rate(pg_stat_statements_mean_time_seconds[5m]) > 1
-        for: 10m
+          rate(pg_stat_statements_mean_time_seconds[5m]) > 0.5
+        for: 5m
         labels:
           severity: warning
           component: postgresql
@@ -119,7 +119,7 @@ groups:
       # Database disk usage
       - alert: HighDatabaseDiskUsage
         expr: |
-          (node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"}) / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} > 0.85
+          (node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"}) / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} > 0.8
         for: 5m
         labels:
           severity: critical
@@ -146,7 +146,7 @@ groups:
       # Redis memory usage
       - alert: HighRedisMemoryUsage
         expr: |
-          redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.8
         for: 5m
         labels:
           severity: warning
@@ -185,8 +185,8 @@ groups:
       # High CPU usage
       - alert: HighCPUUsage
         expr: |
-          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 10m
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 75
+        for: 5m
         labels:
           severity: warning
         annotations:
@@ -196,8 +196,8 @@ groups:
       # High memory usage
       - alert: HighMemoryUsage
         expr: |
-          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
-        for: 10m
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
         labels:
           severity: warning
         annotations:
@@ -207,7 +207,7 @@ groups:
       # Disk space low
       - alert: DiskSpaceLow
         expr: |
-          (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 15
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 20
         for: 5m
         labels:
           severity: warning

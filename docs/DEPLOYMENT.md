@@ -111,7 +111,8 @@ C2B_CONFIRMATION_URL=https://your-domain.com/webhook/c2b/confirmation
 C2B_VALIDATION_URL=https://your-domain.com/webhook/c2b/validation
 
 # Security
-UI_TOKEN=generate_secure_random_token
+UI_TOKEN=set_me_via_env
+WEBHOOK_SIGNING_SECRET=set_me_via_env
 ```
 
 ### 3. Generate Secure Tokens
@@ -188,7 +189,7 @@ curl -X POST http://localhost:5000/webhook/c2b/confirmation \
 
 # Check Grafana
 open http://localhost:3000
-# Login: admin / admin123
+# Login credentials must come from environment variables, not a committed default
 ```
 
 ---

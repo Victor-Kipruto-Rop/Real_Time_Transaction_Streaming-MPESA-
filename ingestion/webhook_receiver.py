@@ -5,8 +5,12 @@ Receives and processes C2B validation/confirmation, B2C result callbacks,
 and STK Push callbacks from Safaricom Daraja API.
 """
 
+import hashlib
+import hmac
+import json
 import logging
 import os
+import time
 from datetime import datetime
 from time import time
 from typing import Any, Dict, Tuple
@@ -15,13 +19,62 @@ import psycopg2
 from flask import Flask, jsonify, redirect, request, send_from_directory
 from pythonjsonlogger import jsonlogger
 
+from app.config import settings
+from app.database.connection import init_db
+from app.database.idempotency import mark_event_seen
 from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequest
+
+init_db()
 
 logger = logging.getLogger(__name__)
 
 db_connection = None
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
+_REPLAY_CACHE: Dict[str, float] = {}
+
+
+def _canonical_payload(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
+
+
+def _get_replay_key(payload: Dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_payload(payload).encode("utf-8")).hexdigest()
+
+
+def _prune_replay_cache() -> None:
+    cutoff = time.monotonic() - settings.REPLAY_TTL_SECONDS
+    expired = [key for key, seen_at in _REPLAY_CACHE.items() if seen_at < cutoff]
+    for key in expired:
+        _REPLAY_CACHE.pop(key, None)
+
+
+def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) -> None:
+    secret = (settings.WEBHOOK_SIGNING_SECRET or "").strip()
+    if not secret and settings.REQUIRE_WEBHOOK_SIGNATURE:
+        raise ValueError("WEBHOOK_SIGNING_SECRET is not configured")
+    if not secret:
+        return
+    if not signature:
+        raise ValueError("missing webhook signature")
+    expected = hmac.new(secret.encode("utf-8"), _canonical_payload(payload).encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise ValueError("invalid webhook signature")
+
+
+def _check_replay(payload: Dict[str, Any]) -> None:
+    _prune_replay_cache()
+    key = _get_replay_key(payload)
+    if key in _REPLAY_CACHE:
+        raise ValueError("duplicate or replayed webhook payload")
+    if mark_event_seen(
+        event_key=key,
+        transaction_id=str(payload.get("TransID") or payload.get("transaction_id") or ""),
+        payload=payload,
+        source="webhook",
+    ):
+        raise ValueError("duplicate or replayed webhook payload")
+    _REPLAY_CACHE[key] = time.monotonic()
 
 
 def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
@@ -379,6 +432,18 @@ def create_app() -> Flask:
                     400,
                 )
 
+            try:
+                signature = (
+                    request.headers.get("X-Safaricom-Signature")
+                    or request.headers.get("X-Signature")
+                    or request.headers.get("X-Mpesa-Signature")
+                )
+                _verify_webhook_signature(payload, signature)
+                _check_replay(payload)
+            except ValueError as exc:
+                logger.warning("Rejected webhook: %s", str(exc))
+                return jsonify({"ResultCode": "1", "ResultDesc": str(exc)}), 401
+
             payload = processor._validate_payload(payload)
 
             logger.debug("Received C2B validation callback")
@@ -432,6 +497,18 @@ def create_app() -> Flask:
                 response = jsonify({"status": "error", "error": "Invalid JSON"}), status
                 WebhookMetrics.record_request(status, time() - started)
                 return response
+
+            try:
+                signature = (
+                    request.headers.get("X-Safaricom-Signature")
+                    or request.headers.get("X-Signature")
+                    or request.headers.get("X-Mpesa-Signature")
+                )
+                _verify_webhook_signature(payload, signature)
+                _check_replay(payload)
+            except ValueError as exc:
+                logger.warning("Rejected webhook: %s", str(exc))
+                return jsonify({"status": "error", "error": str(exc)}), 401
 
             payload = processor._validate_payload(payload)
 

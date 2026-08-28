@@ -182,7 +182,7 @@ class DeadLetterQueueHandler:
                 recovery_status=(
                     "pending" if dlq_message.is_recoverable else "unrecoverable"
                 ),
-                metadata={
+                payload_metadata={
                     "original_topic": dlq_message.original_topic,
                     "retry_count": dlq_message.retry_count,
                     "max_retries": dlq_message.max_retries,

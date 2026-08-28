@@ -7,52 +7,96 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to deploy (e.g., v1.0.0)'
+        description: Version to deploy (for example v1.2.3)
         required: true
         type: string
-
-# Disable entire workflow until credentials are configured
-# Remove this line to enable: if: false
+      dry_run:
+        description: Validate only; do not deploy
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  AWS_REGION: us-east-1
+  PROD_NAMESPACE: mpesa-production
+  PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://api.your-domain.com' }}
   DEPLOY_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+concurrency:
+  group: production-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   validate:
-    name: Validate Release
+    name: Validate release gate
     runs-on: ubuntu-latest
-    continue-on-error: true
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -r requirements.txt
+
       - name: Validate version format
         run: |
-          if [[ ! "${{ env.DEPLOY_VERSION }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version format: ${{ env.DEPLOY_VERSION }}. Expected format: v1.0.0"
+          if [[ ! "${DEPLOY_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format: ${DEPLOY_VERSION}. Expected format: v1.0.0"
             exit 1
           fi
 
-      - name: Check if staging tests passed
+      - name: Enforce non-default secret policy
+        env:
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
-          # Verify staging deployment was successful
-          echo "Checking staging deployment status..."
-          # Add logic to verify staging tests
+          set -euo pipefail
+          for name in WEBHOOK_SIGNING_SECRET SECRET_KEY POSTGRES_PASSWORD; do
+            value="${!name:-}"
+            if [ -z "$value" ] || [[ "$value" =~ (change_me|example|default|placeholder|admin123|secret)$ ]]; then
+              echo "::error::$name must be set to a real non-default secret value"
+              exit 1
+            fi
+          done
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit -q --maxfail=1
+
+      - name: Run smoke tests
+        env:
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          REQUIRE_WEBHOOK_SIGNATURE: "true"
+        run: |
+          pytest tests/e2e/smoke_tests.py -q --maxfail=1
 
   security-scan:
-    name: Security Scan
+    name: Security scan
     needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -60,13 +104,13 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
   build:
-    name: Build Production Images
+    name: Build production images
     needs: [validate, security-scan]
     runs-on: ubuntu-latest
     permissions:
@@ -82,7 +126,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Log in to Container Registry
+      - name: Log in to the container registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -100,7 +144,7 @@ jobs:
             type=raw,value=production-latest
             type=sha,prefix=prod-
 
-      - name: Build and push Docker image
+      - name: Build and push container image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -111,158 +155,184 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VERSION=${{ env.DEPLOY_VERSION }}
             COMMIT_SHA=${{ github.sha }}
 
-      - name: Sign container images
-        run: |
-          # Sign images with cosign (optional)
-          echo "Image signing would happen here"
-
   backup:
-    name: Backup Production Database
+    name: Snapshot production database
     needs: build
     runs-on: ubuntu-latest
-    continue-on-error: true
-    if: always()
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
     steps:
-      - name: Checkout code
-        if: secrets.AWS_ACCESS_KEY_ID != ''
-        uses: actions/checkout@v4
+      - name: Check AWS access
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "Skipping database snapshot because AWS credentials are not configured."
+            exit 0
+          fi
 
       - name: Configure AWS credentials
-        if: secrets.AWS_ACCESS_KEY_ID != ''
         uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Create database backup
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Create RDS snapshot
         run: |
-          # Trigger RDS snapshot
           aws rds create-db-snapshot \
             --db-instance-identifier mpesa-prod-db \
             --db-snapshot-identifier mpesa-prod-backup-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)
 
-      - name: Wait for backup completion
-        if: secrets.AWS_ACCESS_KEY_ID != ''
-        run: |
-          echo "Waiting for backup to complete..."
-          sleep 60
-
   deploy:
-    name: Deploy to Production
+    name: Deploy to production
     needs: [build, backup]
     runs-on: ubuntu-latest
-    continue-on-error: true
-    if: always()
+    timeout-minutes: 30
+    if: ${{ (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && github.event.inputs.dry_run != 'true' }}
+    permissions:
+      contents: read
+      id-token: write
     environment:
       name: production
-      url: https://api.your-domain.com
+      url: ${{ vars.PROD_BASE_URL || 'https://api.your-domain.com' }}
     steps:
+      - name: Check required production secrets and vars
+        shell: bash
+        env:
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+        run: |
+          set -euo pipefail
+          for name in WEBHOOK_SIGNING_SECRET SECRET_KEY; do
+            value="${!name:-}"
+            if [ -z "$value" ] || [[ "$value" =~ (change_me|example|default|placeholder|admin123|secret)$ ]]; then
+              echo "::error::$name is missing or still set to a default value"
+              exit 1
+            fi
+          done
+          if [ -z "${PROD_BASE_URL:-}" ]; then
+            echo "::error::PROD_BASE_URL repository variable must be configured"
+            exit 1
+          fi
+          if [ -z "${AWS_ROLE_TO_ASSUME:-}" ] && { [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; }; then
+            echo "::error::Either AWS_ROLE_TO_ASSUME or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be configured"
+            exit 1
+          fi
+
       - name: Checkout code
-        if: secrets.AWS_ACCESS_KEY_ID != ''
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Configure AWS credentials via OIDC
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v6.2.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: production-deploy-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials via static keys
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Install kubectl
-        if: secrets.AWS_ACCESS_KEY_ID != ''
         uses: azure/setup-kubectl@v5
         with:
           version: 'v1.27.0'
 
       - name: Configure kubectl
-        if: secrets.AWS_ACCESS_KEY_ID != ''
         run: |
-          aws eks update-kubeconfig --name mpesa-production-cluster --region us-east-1
+          aws eks update-kubeconfig --name mpesa-production-cluster --region ${{ env.AWS_REGION }}
 
-      - name: Create deployment backup
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Backup current deployment state
         run: |
-          # Backup current deployment state
-          kubectl get deployment webhook-receiver -n mpesa-production -o yaml > webhook-receiver-backup.yaml
-          kubectl get deployment kafka-consumer -n mpesa-production -o yaml > kafka-consumer-backup.yaml
+          kubectl get deployment webhook-receiver -n ${{ env.PROD_NAMESPACE }} -o yaml > webhook-receiver-backup.yaml || true
+          kubectl get deployment kafka-consumer -n ${{ env.PROD_NAMESPACE }} -o yaml > kafka-consumer-backup.yaml || true
 
-      - name: Deploy with Blue-Green strategy
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Deploy new production image
         run: |
-          # Deploy to green environment
-          kubectl apply -f kubernetes/production/green-deployment.yaml
-          
-          # Wait for green deployment to be ready
-          kubectl rollout status deployment/webhook-receiver-green -n mpesa-production --timeout=10m
-          kubectl rollout status deployment/kafka-consumer-green -n mpesa-production --timeout=10m
+          kubectl set image deployment/webhook-receiver \
+            webhook-receiver=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-webhook-receiver:production-latest \
+            -n ${{ env.PROD_NAMESPACE }}
+          kubectl set image deployment/kafka-consumer \
+            kafka-consumer=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-kafka-consumer:production-latest \
+            -n ${{ env.PROD_NAMESPACE }}
+          kubectl rollout status deployment/webhook-receiver -n ${{ env.PROD_NAMESPACE }} --timeout=10m
+          kubectl rollout status deployment/kafka-consumer -n ${{ env.PROD_NAMESPACE }} --timeout=10m
 
-      - name: Run smoke tests on green environment
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Run production smoke tests
+        env:
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          REQUIRE_WEBHOOK_SIGNATURE: "true"
         run: |
-          # Test green environment
-          pytest tests/e2e/smoke_tests.py --production --green-env
+          pytest tests/e2e/smoke_tests.py -q --maxfail=1
 
-      - name: Switch traffic to green
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+      - name: Verify deployment health
         run: |
-          # Update service to point to green deployment
-          kubectl patch service webhook-receiver -n mpesa-production \
-            -p '{"spec":{"selector":{"version":"green"}}}'
+          kubectl get pods -n ${{ env.PROD_NAMESPACE }}
+          kubectl get ingress -n ${{ env.PROD_NAMESPACE }}
 
-      - name: Monitor for 5 minutes
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+  notify:
+    name: Notify release result
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Release signal and production health gate
+        shell: bash
+        env:
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
         run: |
-          echo "Monitoring green environment..."
-          sleep 300
-          
-          # Check error rates
-          ERROR_RATE=$(curl -s "http://prometheus:9090/api/v1/query?query=rate(http_requests_total{status=~\"5..\"}[5m])" | jq -r '.data.result[0].value[1]')
-          
-          if (( $(echo "$ERROR_RATE > 0.05" | bc -l) )); then
-            echo "High error rate detected: $ERROR_RATE"
+          if [ "${{ needs.deploy.result }}" != "success" ]; then
+            echo "Production deployment failed or was skipped."
             exit 1
           fi
 
+          if [ -z "${PROD_BASE_URL:-}" ]; then
+            echo "PROD_BASE_URL is not configured; cannot verify production health."
+            exit 1
+          fi
+
+          echo "Monitoring green environment..."
+          curl -fsS "${PROD_BASE_URL}/health" | jq -e '.status == "ok" or .status == "healthy"' >/dev/null
+          echo "Production deployment completed successfully and health checks are green."
+
       - name: Scale down blue environment
-        if: success() && secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ success() && secrets.AWS_ACCESS_KEY_ID != '' }}
         run: |
           kubectl scale deployment webhook-receiver-blue --replicas=0 -n mpesa-production
           kubectl scale deployment kafka-consumer-blue --replicas=0 -n mpesa-production
 
       - name: Run database migrations
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ success() && secrets.AWS_ACCESS_KEY_ID != '' }}
         run: |
           kubectl run dbt-migrate-prod-${{ github.run_number }} \
             --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dbt:${{ env.DEPLOY_VERSION }} \
             --restart=Never \
             --namespace=mpesa-production \
             --command -- dbt run --target production
-          
+
           kubectl wait --for=condition=complete job/dbt-migrate-prod-${{ github.run_number }} \
             -n mpesa-production --timeout=15m
 
       - name: Verify deployment
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ success() && secrets.AWS_ACCESS_KEY_ID != '' }}
         run: |
-          # Comprehensive health checks
           kubectl get pods -n mpesa-production
-          
-          # Test all critical endpoints
-          curl -f https://api.your-domain.com/health || exit 1
-          
-          # Verify database connectivity
+          curl -f "${{ vars.PROD_BASE_URL }}/health" || exit 1
           kubectl exec -n mpesa-production deployment/webhook-receiver -- \
-            python -c "from app.db import test_connection; test_connection()"
+            python -c "from app.database.connection import check_db; print(check_db())"
 
       - name: Update deployment tags
-        if: secrets.AWS_ACCESS_KEY_ID != ''
+        if: ${{ success() && secrets.AWS_ACCESS_KEY_ID != '' }}
         run: |
           kubectl label deployment webhook-receiver -n mpesa-production \
             version=${{ env.DEPLOY_VERSION }} --overwrite

@@ -12,9 +12,9 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-NAMESPACE="mpesa-pipeline"
+NAMESPACE="${NAMESPACE:-mpesa-production}"
 CONTEXT="${KUBE_CONTEXT:-}"
-ENVIRONMENT="${ENVIRONMENT:-dev}"
+ENVIRONMENT="${ENVIRONMENT:-production}"
 DRY_RUN="${DRY_RUN:-false}"
 
 print_header() {

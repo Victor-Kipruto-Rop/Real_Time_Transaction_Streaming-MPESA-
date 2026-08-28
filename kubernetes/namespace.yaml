@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: mpesa-pipeline
+  name: mpesa-production
   labels:
-    name: mpesa-pipeline
-    environment: ${ENVIRONMENT}
+    name: mpesa-production
+    environment: production
     managed-by: terraform
     component: mpesa-realtime-streaming
   annotations:
-    description: "M-Pesa Real-Time Transaction Streaming Pipeline"
+    description: "M-Pesa Real-Time Transaction Streaming Pipeline production namespace"
     owner: "data-engineering-team"

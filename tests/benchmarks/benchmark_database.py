@@ -22,7 +22,7 @@ class DatabaseBenchmark:
         port=5432,
         database="mpesa_analytics",
         user="data_engineer",
-        password="change_me",
+        password="set_me_via_env",
     ):
         self.connection_params = {
             "host": host,

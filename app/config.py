@@ -3,14 +3,78 @@ FastAPI Configuration Module
 Complete settings management for production deployment
 """
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings
 from typing import List
 import os
+
+from pydantic import ConfigDict, ValidationError, ValidationInfo, field_validator
+from pydantic_settings import BaseSettings
+
+
+_INSECURE_SECRET_PATTERNS = (
+    "admin123",
+    "change_me",
+    "change-me",
+    "default-secret",
+    "dev-secret",
+    "example",
+    "letmein",
+    "placeholder",
+    "replace_me",
+    "your_secure_token_here",
+)
+
+
+def _normalize_secret_env() -> None:
+    env_file = ".env"
+    if os.path.exists(env_file):
+        with open(env_file, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = [segment.strip() for segment in line.split("=", 1)]
+                if key in {
+                    "POSTGRES_PASSWORD",
+                    "GRAFANA_ADMIN_PASSWORD",
+                    "SECRET_KEY",
+                    "UI_TOKEN",
+                    "WEBHOOK_SIGNING_SECRET",
+                    "DARAJA_CONSUMER_SECRET",
+                    "DARAJA_PASSKEY",
+                    "REDIS_PASSWORD",
+                    "SMTP_PASSWORD",
+                }:
+                    candidate = value.strip()
+                    lowered = candidate.lower()
+                    if candidate and (lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS)):
+                        os.environ[key] = ""
+
+    for key in {
+        "POSTGRES_PASSWORD",
+        "GRAFANA_ADMIN_PASSWORD",
+        "SECRET_KEY",
+        "UI_TOKEN",
+        "WEBHOOK_SIGNING_SECRET",
+        "DARAJA_CONSUMER_SECRET",
+        "DARAJA_PASSKEY",
+        "REDIS_PASSWORD",
+        "SMTP_PASSWORD",
+    }:
+        value = os.getenv(key)
+        if value is None:
+            continue
+        candidate = str(value).strip()
+        if candidate == "":
+            continue
+        lowered = candidate.lower()
+        if lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS):
+            os.environ[key] = ""
 
 
 class Settings(BaseSettings):
     """Application settings from environment"""
+
+    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     # Application
     APP_NAME: str = "M-Pesa Analytics Platform"
@@ -32,14 +96,40 @@ class Settings(BaseSettings):
             return False
         return False
 
+    @staticmethod
+    def _reject_placeholder_secret(value: str, field_name: str) -> str:
+        candidate = str(value or "").strip()
+        if candidate == "":
+            return value
+        lowered = candidate.lower()
+        if lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS):
+            raise ValueError(f"{field_name} must not use a placeholder or non-default secret value")
+        return value
+
+    @field_validator(
+        "POSTGRES_PASSWORD",
+        "SECRET_KEY",
+        "GRAFANA_ADMIN_PASSWORD",
+        "UI_TOKEN",
+        "WEBHOOK_SIGNING_SECRET",
+        "DARAJA_CONSUMER_SECRET",
+        "DARAJA_PASSKEY",
+        "REDIS_PASSWORD",
+        "SMTP_PASSWORD",
+        mode="before",
+    )
+    @classmethod
+    def _validate_secret(cls, value: str, info: ValidationInfo) -> str:
+        if value is None:
+            return value
+        return cls._reject_placeholder_secret(value, info.field_name)
+
     # Database
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
-    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", 5432))
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", 5433))
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "mpesa_analytics")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "data_engineer")
-    POSTGRES_PASSWORD: str = os.getenv(
-        "POSTGRES_PASSWORD", "change_me_to_secure_password"
-    )
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "")
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", 20))
 
     @property
@@ -61,14 +151,26 @@ class Settings(BaseSettings):
 
     # Grafana
     GRAFANA_URL: str = os.getenv("GRAFANA_URL", "http://localhost:3000")
-    GRAFANA_ADMIN_PASSWORD: str = os.getenv("GRAFANA_ADMIN_PASSWORD", "admin123")
+    GRAFANA_ADMIN_PASSWORD: str = os.getenv("GRAFANA_ADMIN_PASSWORD", "")
 
     # Security & UI
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
-    UI_TOKEN: str = os.getenv("UI_TOKEN", "your_secure_token_here")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    UI_TOKEN: str = os.getenv("UI_TOKEN", "")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_HOURS: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", 24))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
+    WEBHOOK_SIGNING_SECRET: str = os.getenv("WEBHOOK_SIGNING_SECRET", "")
+    REQUIRE_WEBHOOK_SIGNATURE: bool = (
+        os.getenv("REQUIRE_WEBHOOK_SIGNATURE", "true").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    REPLAY_TTL_SECONDS: int = int(os.getenv("REPLAY_TTL_SECONDS", 300))
+    KAFKA_DLQ_TOPIC: str = os.getenv("KAFKA_DLQ_TOPIC", "mpesa-transactions-dlq")
+    KAFKA_RETRY_TOPIC: str = os.getenv("KAFKA_RETRY_TOPIC", "mpesa-transactions-retry")
+    KAFKA_RETRY_MAX_ATTEMPTS: int = int(os.getenv("KAFKA_RETRY_MAX_ATTEMPTS", 3))
+    KAFKA_RETRY_BACKOFF_SECONDS: int = int(
+        os.getenv("KAFKA_RETRY_BACKOFF_SECONDS", 2)
+    )
 
     # HTTPS & Domain
     DOMAIN: str = os.getenv("DOMAIN", "localhost:8000")
@@ -114,10 +216,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "kiprutovictor39@gmail.com")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
 
-
-settings = Settings()
+_normalize_secret_env()
+try:
+    settings = Settings()
+except ValidationError:
+    _normalize_secret_env()
+    settings = Settings()

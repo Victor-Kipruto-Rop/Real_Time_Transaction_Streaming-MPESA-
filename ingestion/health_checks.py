@@ -11,6 +11,8 @@ import logging
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 import psycopg2
 
@@ -261,7 +263,7 @@ class HealthChecker:
 
             if last_transaction:
                 staleness = datetime.utcnow() - last_transaction
-                status = "healthy" if staleness.total_seconds() < 300 else "warning"
+                status = "healthy" if staleness.total_seconds() < 180 else "warning" if staleness.total_seconds() < 600 else "critical"
 
                 return {
                     "status": status,
@@ -283,6 +285,31 @@ class HealthChecker:
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
+    def check_webhook_endpoint(self) -> Dict[str, Any]:
+        """Verify the public webhook endpoint responds successfully."""
+        base_url = os.getenv("PUBLIC_BASE_URL") or os.getenv("DOMAIN") or "http://localhost:5000"
+        url = base_url.rstrip("/") + "/health"
+        try:
+            req = Request(url, method="GET")
+            with urlopen(req, timeout=5) as response:
+                status = getattr(response, "status", response.getcode())
+                body = response.read(256).decode("utf-8", errors="replace")
+                return {
+                    "status": "healthy" if status < 400 else "unhealthy",
+                    "url": url,
+                    "status_code": status,
+                    "response_preview": body[:256],
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+        except (URLError, TimeoutError, ValueError) as exc:
+            logger.error(f"Webhook endpoint health check failed: {exc}")
+            return {
+                "status": "unhealthy",
+                "url": url,
+                "error": str(exc),
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
     def get_full_health_report(self) -> Dict[str, Any]:
         """Generate comprehensive health report."""
         return {
@@ -292,6 +319,7 @@ class HealthChecker:
             "message_lag": self.check_message_lag(),
             "transaction_volume": self.check_transaction_volume(hours=1),
             "data_staleness": self.check_data_staleness(),
+            "webhook_endpoint": self.check_webhook_endpoint(),
         }
 
 

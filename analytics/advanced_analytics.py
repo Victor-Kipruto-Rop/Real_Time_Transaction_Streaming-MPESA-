@@ -33,7 +33,7 @@ class AdvancedAnalyticsEngine:
             "port": int(os.getenv("DB_PORT", 5433)),
             "database": os.getenv("DB_NAME", "mpesa_analytics"),
             "user": os.getenv("DB_USER", "data_engineer"),
-            "password": os.getenv("DB_PASSWORD", "change_me"),
+            "password": os.getenv("DB_PASSWORD", ""),
         }
         self.conn = None
         self._connect()

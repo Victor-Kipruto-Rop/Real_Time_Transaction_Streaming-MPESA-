@@ -60,7 +60,7 @@ services:
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME: "postgresql://data_engineer:change_me@postgres:5432/mpesa_analytics?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://data_engineer:set_me_via_env@postgres:5432/mpesa_analytics?sslmode=disable"
     restart: unless-stopped
     networks:
       - monitoring

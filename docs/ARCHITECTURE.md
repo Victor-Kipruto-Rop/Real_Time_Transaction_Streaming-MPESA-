@@ -1,243 +1,133 @@
-# M-Pesa Analytics Platform - Architecture Documentation
+# Architecture Summary
 
-## Table of Contents
+## System overview
 
-- [System Overview](#system-overview)
-- [Architecture Diagram](#architecture-diagram)
-- [Components](#components)
-- [Data Flow](#data-flow)
-- [Technology Stack](#technology-stack)
-- [Design Patterns](#design-patterns)
-- [Scalability](#scalability)
-- [Security Architecture](#security-architecture)
-- [Disaster Recovery](#disaster-recovery)
+This project is an event-driven M-Pesa transaction processing platform built around four core responsibilities:
 
----
+1. secure webhook ingestion
+2. durable transaction validation and deduplication
+3. Kafka-backed asynchronous processing
+4. operational analytics and monitoring
 
-## System Overview
-
-The M-Pesa Analytics Platform is a real-time data engineering system designed to process mobile money transactions at scale. It implements a modern event-driven architecture with the following characteristics:
-
-- **Real-time Processing**: Sub-second latency for transaction ingestion
-- **Scalable**: Handles 10,000+ transactions per second
-- **Reliable**: 99.9% uptime with automatic failover
-- **Secure**: End-to-end encryption and compliance with financial regulations
-- **Observable**: Comprehensive monitoring and alerting
-
-### Key Capabilities
-
-1. **Transaction Ingestion**: Receive webhooks from Safaricom Daraja API
-2. **Stream Processing**: Real-time event processing with Apache Kafka
-3. **Data Transformation**: SQL-based transformations with dbt
-4. **Analytics**: Advanced analytics and fraud detection
-5. **Visualization**: Real-time dashboards with Grafana
+The runtime is intentionally designed to mirror production payment-system patterns, including replay protection, fail-safe configuration, idempotency tracking, retry handling, and alert-based operational oversight.
 
 ---
 
-## Architecture Diagram
+## High-level architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL SYSTEMS                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌──────────────────┐         ┌──────────────────┐                 │
-│  │  Safaricom       │         │   Mobile Users   │                 │
-│  │  Daraja API      │         │   (STK Push)     │                 │
-│  └────────┬─────────┘         └────────┬─────────┘                 │
-│           │                             │                            │
-└───────────┼─────────────────────────────┼────────────────────────────┘
-            │                             │
-            │ HTTPS Webhooks              │ API Requests
-            │                             │
-┌───────────▼─────────────────────────────▼────────────────────────────┐
-│                      INGESTION LAYER                                  │
-├───────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │              Webhook Receiver (Flask)                          │  │
-│  │  - Rate Limiting (120 req/min)                                 │  │
-│  │  - Authentication & Validation                                 │  │
-│  │  - Duplicate Detection (Redis)                                 │  │
-│  └──────────────────────┬─────────────────────────────────────────┘  │
-│                         │                                             │
-└─────────────────────────┼─────────────────────────────────────────────┘
-                          │
-                          │ Produce Events
-                          │
-┌─────────────────────────▼─────────────────────────────────────────────┐
-│                    STREAMING LAYER                                     │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │                    Apache Kafka                                   │ │
-│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐    │ │
-│  │  │ mpesa-         │  │ mpesa-         │  │ mpesa-         │    │ │
-│  │  │ transactions   │  │ transactions   │  │ transactions   │    │ │
-│  │  │ (Partition 0)  │  │ (Partition 1)  │  │ (Partition 2)  │    │ │
-│  │  └────────────────┘  └────────────────┘  └────────────────┘    │ │
-│  │                                                                   │ │
-│  │  ┌────────────────┐                                              │ │
-│  │  │ Dead Letter    │  (Failed Messages)                          │ │
-│  │  │ Queue (DLQ)    │                                              │ │
-│  │  └────────────────┘                                              │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-│                         │                                              │
-└─────────────────────────┼──────────────────────────────────────────────┘
-                          │
-                          │ Consume Events
-                          │
-┌─────────────────────────▼──────────────────────────────────────────────┐
-│                   PROCESSING LAYER                                      │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌────────────────────────────────────────────────────────────────┐    │
-│  │              Kafka Consumer / Flink Processor                   │    │
-│  │  - Event Enrichment                                             │    │
-│  │  - Data Validation                                              │    │
-│  │  - Fraud Detection (ML)                                         │    │
-│  │  - Aggregations                                                 │    │
-│  └──────────────────────┬──────────────────────────────────────────┘   │
-│                         │                                               │
-└─────────────────────────┼───────────────────────────────────────────────┘
-                          │
-                          │ Write to Storage
-                          │
-┌─────────────────────────▼───────────────────────────────────────────────┐
-│                     STORAGE LAYER                                        │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    │
-│  │   PostgreSQL    │    │   Redis Cache   │    │   BigQuery      │    │
-│  │   (Primary DB)  │    │   (Hot Data)    │    │   (Analytics)   │    │
-│  │                 │    │                 │    │                 │    │
-│  │  - Transactions │    │  - Sessions     │    │  - Historical   │    │
-│  │  - Customers    │    │  - Dedup Cache  │    │  - Aggregates   │    │
-│  │  - Metadata     │    │  - Rate Limits  │    │  - ML Features  │    │
-│  └─────────────────┘    └─────────────────┘    └─────────────────┘    │
-│                                                                           │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    │
-                                    │ Read Data
-                                    │
-┌───────────────────────────────────▼───────────────────────────────────────┐
-│                   TRANSFORMATION LAYER                                     │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────┐     │
-│  │                         dbt (Data Build Tool)                     │     │
-│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐    │     │
-│  │  │  Staging       │  │  Intermediate  │  │  Marts         │    │     │
-│  │  │  Models        │  │  Models        │  │  (Analytics)   │    │     │
-│  │  └────────────────┘  └────────────────┘  └────────────────┘    │     │
-│  │                                                                   │     │
-│  │  - Data Quality Tests                                            │     │
-│  │  - Incremental Models                                            │     │
-│  │  - Documentation                                                 │     │
-│  └──────────────────────────────────────────────────────────────────┘     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │
-┌───────────────────────────────────▼───────────────────────────────────────┐
-│                   ANALYTICS & ML LAYER                                     │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌────────────────────────────┐    ┌────────────────────────────┐        │
-│  │   Advanced Analytics       │    │   ML Models                │        │
-│  │   - Customer Segmentation  │    │   - Fraud Detection        │        │
-│  │   - Trend Analysis         │    │   - Anomaly Detection      │        │
-│  │   - Forecasting            │    │   - Risk Scoring           │        │
-│  └────────────────────────────┘    └────────────────────────────┘        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │
-┌───────────────────────────────────▼───────────────────────────────────────┐
-│                   PRESENTATION LAYER                                       │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌────────────────────────────┐    ┌────────────────────────────┐        │
-│  │   Grafana Dashboards       │    │   REST API                 │        │
-│  │   - Executive Dashboard    │    │   - Query Endpoints        │        │
-│  │   - Operations Dashboard   │    │   - Admin Endpoints        │        │
-│  │   - Fraud Dashboard        │    │   - Webhook Endpoints      │        │
-│  │   - Customer Intelligence  │    │   - Analytics API          │        │
-│  └────────────────────────────┘    └────────────────────────────┘        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │
-┌───────────────────────────────────▼───────────────────────────────────────┐
-│                   MONITORING & OBSERVABILITY                               │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             │
-│  │  Prometheus    │  │  Alertmanager  │  │  ELK Stack     │             │
-│  │  (Metrics)     │  │  (Alerts)      │  │  (Logs)        │             │
-│  └────────────────┘  └────────────────┘  └────────────────┘             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+```text
+Safaricom Daraja API
+        |
+        v
+Webhook Receiver (Flask / FastAPI entry points)
+        |
+        v
+Signature Validation + Replay Guard
+        |
+        v
+Kafka Producer
+        |
+        v
+Kafka Topic (mpesa-transactions)
+        |
+        v
+Kafka Consumer
+        |
+        +--> Database-backed idempotency + message state
+        +--> Retry / DLQ processing path
+        +--> PostgreSQL persistence
+        |
+        v
+dbt transformation models
+        |
+        v
+Grafana dashboards + operational monitoring
 ```
 
 ---
 
-## Components
+## Key runtime components
 
-### 1. Webhook Receiver (Flask Application)
+### Webhook ingress layer
 
-**Purpose**: Receive and validate M-Pesa transaction webhooks
+The webhook layer is responsible for receiving callback payloads from the Safaricom platform and validating that they are legitimate, timely, and not replays of an already accepted event.
 
-**Key Features**:
-- RESTful API endpoints for C2B, STK Push callbacks
-- Request validation and sanitization
-- Rate limiting (120 requests/minute)
-- Duplicate transaction detection using Redis
-- Authentication via Bearer tokens
-- Health check endpoint
+Responsibilities:
 
-**Technology**: Python Flask, Redis
+- inbound safety checks and payload validation
+- signature verification against the configured secret
+- canonical payload hashing and integrity enforcement
+- duplicate and replay detection using a durable idempotency record
+- health endpoint and operational readiness checks
 
-**Scaling**: Horizontal scaling with load balancer
+### Streaming layer
 
----
+The streaming layer decouples ingestion from processing and ensures that transaction events can be handled asynchronously without blocking the client-facing webhook path.
 
-### 2. Apache Kafka (Message Broker)
+Responsibilities:
 
-**Purpose**: Reliable, scalable event streaming
+- message publication to Kafka topics
+- batching and resilience around transient producer failures
+- retry and dead-letter handling for consumer-side faults
+- message state tracking across the processing lifecycle
 
-**Configuration**:
-- **Topic**: `mpesa-transactions`
-- **Partitions**: 3 (for parallel processing)
-- **Replication Factor**: 3 (production)
-- **Retention**: 7 days
+### Persistence and deduplication layer
 
-**Key Features**:
-- At-least-once delivery guarantee
-- Message ordering within partitions
-- Consumer groups for parallel processing
-- Dead Letter Queue (DLQ) for failed messages
+This layer ensures the system cannot process the same transaction more than once, even under retry or network repetition conditions.
 
----
+Responsibilities:
 
-### 3. Kafka Consumer / Stream Processor
+- persistent event state records
+- transaction-level duplicate detection
+- idempotency keys and replay TTL checks
+- operational logs for failed or recovered messages
 
-**Purpose**: Process events from Kafka and write to database
+### Analytics and monitoring layer
 
-**Processing Steps**:
-1. Deserialize JSON messages
-2. Validate data schema
-3. Enrich with additional data
-4. Detect duplicates
-5. Run fraud detection
-6. Write to PostgreSQL
-7. Update cache
+The platform exposes both operational and business intelligence views through dashboards and transformation models.
 
-**Technology**: Python, Apache Flink (optional)
+Responsibilities:
+
+- dbt-based staging and mart transformations
+- data-quality checks and completeness monitoring
+- Grafana executive and operations views
+- Prometheus alert rules and health procedures
 
 ---
 
-### 4. PostgreSQL Database
+## Security and reliability controls
+
+Production hardening in this project focuses on the most critical fintech failure modes:
+
+- invalid or unsigned webhook payloads are rejected
+- replayed events are blocked before business processing
+- duplicate payloads use a durable store, not only in-memory memory
+- Kafka consumer failures are routed through retriable and dead-letter paths
+- secrets are environment-driven rather than repo-stored
+- deployment gates require production approval and env validation
+
+---
+
+## Deployment model
+
+The project is structured for containerized deployment using Docker Compose for development and Kubernetes for production-style orchestration. The deployment layer includes namespace alignment, config maps, service definitions, ingress setup, and monitoring integration for production operations.
+
+---
+
+## Operational view
+
+The system is designed to be monitored from both a platform and a business perspective:
+
+- health checks validate brokers, DB connectivity, staleness, and endpoint reachability
+- alert rules monitor error rates, lag, disk usage, and service availability
+- dashboards provide transaction-level and operations-level visibility
+- runbooks and incident workflows define safe recovery and rollback steps
+
+---
+
+## Summary
+
+This architecture is intentionally balanced between real-time transaction processing and production reliability. It gives the project a credible operational foundation for event ingestion, duplicate prevention, monitoring, and analytics while keeping the design understandable and maintainable for continued engineering work.
 
 **Purpose**: Primary data store for transactions
 

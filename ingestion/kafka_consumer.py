@@ -9,12 +9,25 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import sys
 
-from kafka import KafkaConsumer
-from kafka.errors import KafkaError
+try:
+    from kafka import KafkaConsumer
+    from kafka.errors import KafkaError
+except ModuleNotFoundError:  # pragma: no cover - exercised only in lightweight test environments
+    KafkaConsumer = None
+    KafkaError = RuntimeError
+
 import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 import os
+
+from app.database.connection import init_db
+from app.database.idempotency import (
+    mark_message_retry,
+    mark_transaction_processed,
+    record_dlq_event,
+    record_message_state,
+)
 
 # Load environment variables
 load_dotenv()
@@ -44,7 +57,7 @@ class SafaricomTransactionProcessor:
             "port": int(os.getenv("DB_PORT", 5433)),
             "database": os.getenv("DB_NAME", "mpesa_analytics"),
             "user": os.getenv("DB_USER", "data_engineer"),
-            "password": os.getenv("DB_PASSWORD", "change_me"),
+            "password": os.getenv("DB_PASSWORD", ""),
         }
 
         # Kafka configuration
@@ -57,7 +70,10 @@ class SafaricomTransactionProcessor:
             "auto_offset_reset": "earliest",
             "value_deserializer": lambda m: json.loads(m.decode("utf-8")),
         }
+        self.max_retries = int(os.getenv("KAFKA_RETRY_MAX_ATTEMPTS", "3"))
+        self.retry_backoff_seconds = int(os.getenv("KAFKA_RETRY_BACKOFF_SECONDS", "2"))
 
+        init_db()
         self._connect_db()
         self._connect_kafka()
 
@@ -71,7 +87,12 @@ class SafaricomTransactionProcessor:
             raise
 
     def _connect_kafka(self):
-        """Establish Kafka consumer connection"""
+        """Establish Kafka consumer connection."""
+        if KafkaConsumer is None:
+            raise RuntimeError(
+                "Kafka client dependency is unavailable in this environment; install the supported kafka-python package to run the consumer."
+            )
+
         try:
             self.consumer = KafkaConsumer(
                 self.kafka_config["topic"],
@@ -297,6 +318,33 @@ class SafaricomTransactionProcessor:
         finally:
             cursor.close()
 
+    def _message_key_for(self, message: Dict[str, Any]) -> str:
+        value = message.get("TransID") or message.get("transaction_id") or json.dumps(message, sort_keys=True)
+        return str(value)
+
+    def _handle_processing_error(self, message: Dict[str, Any], exc: Exception, attempts: int) -> None:
+        message_key = self._message_key_for(message)
+        if attempts < self.max_retries:
+            mark_message_retry(
+                message_key=message_key,
+                topic=self.kafka_config["topic"],
+                attempts=attempts + 1,
+                max_attempts=self.max_retries,
+                payload=message,
+                last_error=str(exc),
+            )
+            logger.warning("Retrying Kafka message %s after attempt %s/%s: %s", message_key, attempts + 1, self.max_retries, exc)
+            return
+
+        record_dlq_event(
+            message_key=message_key,
+            topic=self.kafka_config["topic"],
+            payload=message,
+            error_message=str(exc),
+            error_type="consumer_error",
+        )
+        logger.error("Kafka message %s exhausted retries and was routed to DLQ: %s", message_key, exc)
+
     def process_stream(self):
         """Main stream processing loop"""
         logger.info("Starting Kafka consumer stream...")
@@ -306,14 +354,26 @@ class SafaricomTransactionProcessor:
 
         try:
             for message in self.consumer:
+                current_message = message.value if isinstance(message.value, dict) else message.value
+                message_key = self._message_key_for(current_message)
+                record_message_state(
+                    message_key=message_key,
+                    topic=self.kafka_config["topic"],
+                    status="received",
+                    attempts=0,
+                    max_attempts=self.max_retries,
+                    payload=current_message,
+                )
                 try:
-                    # Parse transaction
-                    transaction = self.parse_c2b_transaction(message.value)
+                    transaction = self.parse_c2b_transaction(current_message)
+                    if not transaction:
+                        raise ValueError("transaction payload is invalid")
+                    if mark_transaction_processed(transaction["transaction_id"], transaction, source="kafka_consumer"):
+                        logger.info("Skipping duplicate Kafka message %s", message_key)
+                        continue
 
-                    if transaction:
-                        batch.append(transaction)
+                    batch.append(transaction)
 
-                    # Insert when batch is full
                     if len(batch) >= batch_size:
                         self.batch_insert_transactions(batch)
                         batch = []
@@ -321,17 +381,16 @@ class SafaricomTransactionProcessor:
                 except Exception as e:
                     logger.error(f"Message processing error: {e}")
                     self.error_count += 1
+                    self._handle_processing_error(current_message, e, 0)
                     continue
 
         except KeyboardInterrupt:
             logger.info("Consumer interrupted by user")
 
         finally:
-            # Insert remaining batch
             if batch:
                 self.batch_insert_transactions(batch)
 
-            # Print statistics
             logger.info("Stream processing stopped")
             logger.info(f"Total processed: {self.processed_count}")
             logger.info(f"Total errors: {self.error_count}")

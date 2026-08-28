@@ -5,7 +5,7 @@ kind: Kustomization
 
 metadata:
   name: mpesa-pipeline-base
-  namespace: mpesa-pipeline
+  namespace: mpesa-production
 
 # Common labels applied to all resources
 commonLabels:
@@ -21,7 +21,7 @@ commonAnnotations:
   last-updated: "2026-05-16"
 
 # Namespace for all resources
-namespace: mpesa-pipeline
+namespace: mpesa-production
 
 # Base images for all deployments
 images:
@@ -108,7 +108,7 @@ vars:
 - name: NAMESPACE
   objref:
     kind: Namespace
-    name: mpesa-pipeline
+    name: mpesa-production
     apiVersion: v1
   fieldref:
     fieldpath: metadata.name

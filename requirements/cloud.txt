@@ -1,0 +1,17 @@
+# Cloud, Security & Monitoring
+boto3==1.43.9
+httpx==0.28.1
+requests==2.31.0
+cryptography>=42.0.0
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+prometheus-client==0.19.0
+python-json-logger==2.0.7
+google-cloud-logging==3.15.0
+google-cloud-monitoring==2.30.0
+google-cloud-storage==2.14.0
+google-cloud-secret-manager==2.28.0
+cloud-sql-python-connector[pg8000]==1.6.0
+protobuf==6.33.6
+python-dateutil==2.8.2
+pytz==2023.3.post1

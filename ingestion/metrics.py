@@ -95,6 +95,18 @@ class MetricsCollector:
             ["topic"],
         )
 
+        self.kafka_retry_attempts = Counter(
+            "mpesa_kafka_retry_attempts_total",
+            "Total Kafka retry attempts",
+            ["topic"],
+        )
+
+        self.kafka_dlq_events = Counter(
+            "mpesa_kafka_dlq_events_total",
+            "Total Kafka events routed to the DLQ",
+            ["topic"],
+        )
+
         self.kafka_connection_errors = Counter(
             "mpesa_kafka_connection_errors_total",
             "Total Kafka connection errors",
@@ -216,6 +228,14 @@ class MetricsCollector:
     def record_message_processed(self, source: str = "webhook") -> None:
         """Record a processed message."""
         self.messages_processed.labels(source=source).inc()
+
+    def record_kafka_retry(self, topic: str) -> None:
+        """Record a Kafka retry event."""
+        self.kafka_retry_attempts.labels(topic=topic).inc()
+
+    def record_kafka_dlq(self, topic: str) -> None:
+        """Record a Kafka DLQ event."""
+        self.kafka_dlq_events.labels(topic=topic).inc()
 
     def record_message_failed(self, error_type: str) -> None:
         """Record a failed message."""

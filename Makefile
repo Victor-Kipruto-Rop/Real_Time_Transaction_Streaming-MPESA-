@@ -20,7 +20,7 @@ POSTGRES_HOST_PORT ?= 5432
 POSTGRES_PORT ?= $(POSTGRES_HOST_PORT)
 POSTGRES_DB ?= mpesa_analytics
 POSTGRES_USER ?= data_engineer
-POSTGRES_PASSWORD ?= change_me
+POSTGRES_PASSWORD ?= set_me_via_env
 DBT_LOG_PATH ?= /tmp/mpesa-dbt-logs
 DBT_TARGET_PATH ?= /tmp/mpesa-dbt-target
 
@@ -138,7 +138,7 @@ grafana-up:
 	@$(MAKE) dashboards
 	@$(DOCKER_COMPOSE) up -d grafana
 	@echo "$(GREEN)✓ Grafana running at http://localhost:3000$(NC)"
-	@echo "   Username: $${GRAFANA_ADMIN_USER:-admin}, Password: $${GRAFANA_ADMIN_PASSWORD:-admin123}"
+	@echo "   Username: $${GRAFANA_ADMIN_USER:-admin}, Password: $${GRAFANA_ADMIN_PASSWORD:-set_me_via_env}"
 
 # ============================================================================
 # DATA PROCESSING

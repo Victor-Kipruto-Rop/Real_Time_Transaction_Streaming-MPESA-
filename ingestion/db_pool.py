@@ -68,11 +68,19 @@ class DatabasePool:
                 logger.info(f"Using AWS RDS IAM authentication for {user}@{host}")
             else:
                 # Local PostgreSQL or standard credentials
+<<<<<<< Updated upstream
                 host = self._explicit_config["host"] or os.environ.get("POSTGRES_HOST", "localhost")
                 port = self._explicit_config["port"] or int(os.environ.get("POSTGRES_PORT", "5432"))
                 database = self._explicit_config["database"] or os.environ.get("POSTGRES_DB", "mpesa_analytics")
                 user = self._explicit_config["user"] or os.environ.get("POSTGRES_USER", "data_engineer")
-                password = self._explicit_config["password"] or os.environ.get("POSTGRES_PASSWORD", "change_me")
+                password = self._explicit_config["password"] or os.environ.get("POSTGRES_PASSWORD", "set_me_via_env")
+=======
+                host = os.environ.get("POSTGRES_HOST", "localhost")
+                port = int(os.environ.get("POSTGRES_PORT", "5432"))
+                database = os.environ.get("POSTGRES_DB", "mpesa_analytics")
+                user = os.environ.get("POSTGRES_USER", "data_engineer")
+                password = os.environ.get("POSTGRES_PASSWORD", "")
+>>>>>>> Stashed changes
                 logger.info(f"Using PostgreSQL connection to {user}@{host}:{port}")
 
             self._pool = psycopg2.pool.SimpleConnectionPool(

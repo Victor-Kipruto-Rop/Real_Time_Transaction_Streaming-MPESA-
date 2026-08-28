@@ -5,8 +5,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements-runtime.txt ./requirements-runtime.txt
-RUN pip install --no-cache-dir -r requirements-runtime.txt
+COPY requirements/base.txt requirements/data.txt requirements/cloud.txt requirements/ml.txt ./
+RUN pip install --no-cache-dir --default-timeout=1000 -r base.txt && \
+    pip install --no-cache-dir --default-timeout=1000 -r data.txt && \
+    pip install --no-cache-dir --default-timeout=1000 -r cloud.txt && \
+    pip install --no-cache-dir --default-timeout=1000 -r ml.txt
 
 COPY ingestion ./ingestion
 COPY schemas ./schemas

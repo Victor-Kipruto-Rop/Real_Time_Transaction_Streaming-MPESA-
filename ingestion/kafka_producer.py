@@ -8,6 +8,7 @@ by downstream consumers (stream processors, analytics, notifications).
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Union
 
@@ -43,6 +44,10 @@ class MpesaKafkaProducer:
         """
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
+        self.dlq_topic = os.getenv("KAFKA_DLQ_TOPIC", "mpesa-transactions-dlq")
+        self.retry_topic = os.getenv("KAFKA_RETRY_TOPIC", "mpesa-transactions-retry")
+        self.max_retries = int(os.getenv("KAFKA_RETRY_MAX_ATTEMPTS", "3"))
+        self.retry_backoff_seconds = int(os.getenv("KAFKA_RETRY_BACKOFF_SECONDS", "2"))
 
         if Producer is None:
             raise RuntimeError(
@@ -70,6 +75,27 @@ class MpesaKafkaProducer:
                 msg.offset(),
             )
 
+    def _route_to_dlq(self, event: Union[Dict[str, Any], Any], reason: str) -> None:
+        try:
+            payload = (
+                event.model_dump(mode="json") if hasattr(event, "model_dump") else event
+            )
+            dlq_event = {
+                "source_topic": self.topic,
+                "failure_reason": reason,
+                "payload": payload,
+                "received_at": datetime.now().isoformat(),
+            }
+            self._producer.produce(
+                self.dlq_topic,
+                value=json.dumps(dlq_event).encode("utf-8"),
+                on_delivery=self._delivery_report,
+            )
+            self._producer.flush(5)
+            logger.warning("Event routed to DLQ topic %s: %s", self.dlq_topic, reason)
+        except Exception as exc:  # pragma: no cover
+            logger.error("Failed to deliver event to DLQ: %s", exc)
+
     def publish_event(
         self,
         event: Union[Dict[str, Any], Any],
@@ -86,22 +112,34 @@ class MpesaKafkaProducer:
         """
         target_topic = topic or self.topic
 
-        try:
-            payload = (
-                event.model_dump(mode="json") if hasattr(event, "model_dump") else event
-            )
-            self._producer.produce(
-                target_topic,
-                value=json.dumps(payload).encode("utf-8"),
-                key=key.encode("utf-8") if key else None,
-                on_delivery=self._delivery_report,
-            )
-            self._producer.poll(0)
-            self._producer.flush(5)
-            return True
-        except Exception as e:
-            logger.error("Error publishing event: %s", str(e))
-            return False
+        for attempt in range(1, self.max_retries + 2):
+            try:
+                payload = (
+                    event.model_dump(mode="json") if hasattr(event, "model_dump") else event
+                )
+                self._producer.produce(
+                    target_topic,
+                    value=json.dumps(payload).encode("utf-8"),
+                    key=key.encode("utf-8") if key else None,
+                    on_delivery=self._delivery_report,
+                )
+                self._producer.poll(0)
+                self._producer.flush(5)
+                return True
+            except Exception as e:
+                if attempt <= self.max_retries:
+                    logger.warning(
+                        "Kafka publish attempt %s/%s failed for topic %s: %s",
+                        attempt,
+                        self.max_retries,
+                        target_topic,
+                        str(e),
+                    )
+                    time.sleep(self.retry_backoff_seconds)
+                    continue
+                logger.error("Error publishing event after retries: %s", str(e))
+                self._route_to_dlq(event, f"publish_failed_after_{self.max_retries}_retries")
+                return False
 
     def publish_transaction(
         self,

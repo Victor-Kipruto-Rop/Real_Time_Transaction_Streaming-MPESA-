@@ -1,0 +1,9 @@
+# Database & Messaging
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+pg8000==1.30.5
+redis==5.0.1
+aioredis==2.0.1
+confluent-kafka==2.3.0
+kafka-python==2.0.2

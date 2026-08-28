@@ -12,6 +12,7 @@ import hmac
 import json
 import re
 import threading
+import time
 import uuid
 from collections import defaultdict
 from datetime import date, datetime, timezone
@@ -22,7 +23,11 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
+from app.database.connection import init_db
+from app.database.idempotency import mark_event_seen, mark_transaction_processed
 from schemas.transaction_schema import normalize_ke_phone
+
+init_db()
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
@@ -32,6 +37,34 @@ _STK_TRANSACTIONS: Dict[str, Dict[str, Any]] = {}
 _FRAUD_ALERTS: List[Dict[str, Any]] = []
 _RECONCILIATIONS: Dict[str, Dict[str, Any]] = {}
 _RATE_COUNTERS: Dict[str, int] = defaultdict(int)
+_REPLAY_CACHE: Dict[str, float] = {}
+
+
+def _prune_replay_cache() -> None:
+    cutoff = time.monotonic() - settings.REPLAY_TTL_SECONDS
+    expired_keys = [key for key, seen_at in _REPLAY_CACHE.items() if seen_at < cutoff]
+    for key in expired_keys:
+        _REPLAY_CACHE.pop(key, None)
+
+
+def _replay_key_for_payload(payload: Dict[str, Any]) -> str:
+    normalized = json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
+    return sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _mark_payload_seen(payload: Dict[str, Any]) -> None:
+    _prune_replay_cache()
+    replay_key = _replay_key_for_payload(payload)
+    if replay_key in _REPLAY_CACHE:
+        raise HTTPException(status_code=409, detail="duplicate or replayed payload")
+    if mark_event_seen(
+        event_key=replay_key,
+        transaction_id=None,
+        payload=payload,
+        source="api",
+    ):
+        raise HTTPException(status_code=409, detail="duplicate or replayed payload")
+    _REPLAY_CACHE[replay_key] = time.monotonic()
 
 
 class STKInitiationRequest(BaseModel):
@@ -78,13 +111,22 @@ async def add_security_headers(request: Request, call_next):
 
 
 def _json_for_signature(payload: Dict[str, Any]) -> str:
-    return json.dumps(payload)
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
 
 
 def _verify_signature(payload: Dict[str, Any], signature: Optional[str]) -> None:
+    secret = (getattr(settings, "WEBHOOK_SIGNING_SECRET", "") or "").strip()
+    if not secret:
+        if settings.REQUIRE_WEBHOOK_SIGNATURE:
+            raise HTTPException(
+                status_code=500,
+                detail="WEBHOOK_SIGNING_SECRET is not configured",
+            )
+        return
+
     if not signature:
         raise HTTPException(status_code=401, detail="missing signature")
-    secret = getattr(settings, "WEBHOOK_SIGNING_SECRET", "") or "test-secret"
+
     expected = hmac.new(
         secret.encode(),
         _json_for_signature(payload).encode(),
@@ -220,6 +262,8 @@ async def stk_callback(
     x_safaricom_signature: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
     _verify_signature(payload, x_safaricom_signature)
+    _mark_payload_seen(payload)
+
     callback = payload.get("Body", {}).get("stkCallback", {})
     checkout_id = callback.get("CheckoutRequestID")
     result_code = int(callback.get("ResultCode", -1))
@@ -228,12 +272,17 @@ async def stk_callback(
         raise HTTPException(status_code=422, detail="missing checkout request id")
 
     with _STATE_LOCK:
+        if checkout_id in _STK_TRANSACTIONS and _STK_TRANSACTIONS[checkout_id].get("status") == status:
+            raise HTTPException(status_code=409, detail="duplicate or replayed callback")
+
         stk_txn = _STK_TRANSACTIONS.get(checkout_id, {})
         stk_txn.update({"checkout_request_id": checkout_id, "status": status})
         _STK_TRANSACTIONS[checkout_id] = stk_txn
         if status == "success":
             txn_id = callback.get("MpesaReceiptNumber") or checkout_id
-            _TRANSACTIONS[txn_id] = {
+            if txn_id in _TRANSACTIONS:
+                raise HTTPException(status_code=409, detail="duplicate transaction")
+            txn_payload = {
                 "transaction_id": txn_id,
                 "phone_number": stk_txn.get("phone_number", ""),
                 "amount": stk_txn.get("amount", 0),
@@ -243,6 +292,9 @@ async def stk_callback(
                 "source": "stk_callback",
                 "received_at": datetime.now(timezone.utc).isoformat(),
             }
+            if mark_transaction_processed(txn_id, txn_payload, source="api"):
+                raise HTTPException(status_code=409, detail="duplicate transaction")
+            _TRANSACTIONS[txn_id] = txn_payload
     return {"ResultCode": 0, "ResultDesc": "accepted"}
 
 
@@ -262,8 +314,15 @@ async def c2b_confirmation(
     x_safaricom_signature: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
     _verify_signature(payload, x_safaricom_signature)
+    _mark_payload_seen(payload)
     transaction = _transaction_from_c2b(payload)
     with _STATE_LOCK:
+        if transaction["transaction_id"] in _TRANSACTIONS:
+            raise HTTPException(status_code=409, detail="duplicate transaction")
+        if mark_transaction_processed(
+            transaction["transaction_id"], transaction, source="c2b_confirmation"
+        ):
+            raise HTTPException(status_code=409, detail="duplicate transaction")
         _TRANSACTIONS[transaction["transaction_id"]] = transaction
         _record_fraud_if_needed(transaction["phone_number"])
     return {"ResultCode": 0, "ResultDesc": "Confirmation accepted"}
