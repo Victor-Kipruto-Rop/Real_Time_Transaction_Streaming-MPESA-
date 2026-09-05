@@ -62,20 +62,27 @@ class C2BConfirmationPayload(C2BValidationPayload):
 
 
 class C2BValidationRequest(BaseModel):
-    """Request schema for C2B validation endpoint.
+    """Request schema for C2B validation/confirmation callbacks.
 
-    Returned by webhook with validation decision.
+    Safaricom delivers a compact callback payload with a transaction ID,
+    amount, phone number, and timestamp. Some payloads include optional
+    account and billing fields, but the strict Daraja fields are not always
+    present in the same shape across callback variants.
     """
 
-    TransactionType: str
     TransID: str
-    TransTime: str
-    TransAmount: float
-    BusinessShortCode: str
-    BillRefNumber: str
-    InvoiceNumber: str
+    TransAmount: str | float
     MSISDN: str
+    TransTime: Optional[str] = None
     AccountReference: Optional[str] = None
+    BillRefNumber: Optional[str] = None
+    InvoiceNumber: Optional[str] = None
+    TransactionType: Optional[str] = None
+    BusinessShortCode: Optional[str] = None
+    FirstName: Optional[str] = None
+    MiddleName: Optional[str] = None
+    LastName: Optional[str] = None
+    OrgAccountBalance: Optional[str] = None
 
     @field_validator("MSISDN")
     @classmethod
@@ -84,24 +91,31 @@ class C2BValidationRequest(BaseModel):
 
     @field_validator("TransAmount")
     @classmethod
-    def _v_amount(cls, v: float) -> float:
-        if v < 1:
+    def _v_amount(cls, v: str | float) -> str | float:
+        try:
+            amount = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("TransAmount must be numeric") from None
+        if amount < 1:
             raise ValueError("Amount must be at least 1 KES")
-        if v > 1_000_000:
+        if amount > 1_000_000:
             raise ValueError("Amount exceeds maximum limit (1M KES)")
         return v
 
     @field_validator("TransTime")
     @classmethod
-    def _v_time(cls, v: str) -> str:
-        datetime.strptime(v, "%Y%m%d%H%M%S")
+    def _v_time(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        datetime.strptime(str(v), "%Y%m%d%H%M%S")
         return v
 
 
 class C2BConfirmationRequest(C2BValidationRequest):
     """Request schema for C2B confirmation endpoint.
 
-    Returned by webhook confirming transaction processing.
+    The confirmation callback shares the same data contract as validation
+    but may omit some optional fields that are not always present.
     """
 
     pass

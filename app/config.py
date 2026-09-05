@@ -24,6 +24,16 @@ _INSECURE_SECRET_PATTERNS = (
 )
 
 
+def _is_placeholder_secret(value: str | None) -> bool:
+    if value is None:
+        return False
+    candidate = str(value).strip()
+    if candidate == "":
+        return False
+    lowered = candidate.lower()
+    return lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS)
+
+
 def _normalize_secret_env() -> None:
     env_file = ".env"
     if os.path.exists(env_file):
@@ -44,9 +54,7 @@ def _normalize_secret_env() -> None:
                     "REDIS_PASSWORD",
                     "SMTP_PASSWORD",
                 }:
-                    candidate = value.strip()
-                    lowered = candidate.lower()
-                    if candidate and (lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS)):
+                    if _is_placeholder_secret(value) and key not in os.environ:
                         os.environ[key] = ""
 
     for key in {
@@ -63,11 +71,7 @@ def _normalize_secret_env() -> None:
         value = os.getenv(key)
         if value is None:
             continue
-        candidate = str(value).strip()
-        if candidate == "":
-            continue
-        lowered = candidate.lower()
-        if lowered == "set_me_via_env" or any(pattern in lowered for pattern in _INSECURE_SECRET_PATTERNS):
+        if _is_placeholder_secret(value):
             os.environ[key] = ""
 
 
@@ -122,7 +126,24 @@ class Settings(BaseSettings):
     def _validate_secret(cls, value: str, info: ValidationInfo) -> str:
         if value is None:
             return value
-        return cls._reject_placeholder_secret(value, info.field_name)
+        value = cls._reject_placeholder_secret(value, info.field_name)
+        if (info.field_name == "WEBHOOK_SIGNING_SECRET" and str(value or "").strip() == ""):
+            return ""
+        return value
+
+    @field_validator("REQUIRE_WEBHOOK_SIGNATURE", mode="before")
+    @classmethod
+    def _validate_require_webhook_signature(cls, value, info: ValidationInfo):
+        secret = str(
+            info.data.get("WEBHOOK_SIGNING_SECRET")
+            or os.getenv("WEBHOOK_SIGNING_SECRET", "")
+            or ""
+        ).strip()
+        if not secret or secret.lower() in {"set_me_via_env"} or any(pattern in secret.lower() for pattern in _INSECURE_SECRET_PATTERNS):
+            return False
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     # Database
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
@@ -160,10 +181,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_HOURS: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", 24))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
     WEBHOOK_SIGNING_SECRET: str = os.getenv("WEBHOOK_SIGNING_SECRET", "")
-    REQUIRE_WEBHOOK_SIGNATURE: bool = (
-        os.getenv("REQUIRE_WEBHOOK_SIGNATURE", "true").strip().lower()
-        in {"1", "true", "yes", "on"}
-    )
+    REQUIRE_WEBHOOK_SIGNATURE: bool = False
     REPLAY_TTL_SECONDS: int = int(os.getenv("REPLAY_TTL_SECONDS", 300))
     KAFKA_DLQ_TOPIC: str = os.getenv("KAFKA_DLQ_TOPIC", "mpesa-transactions-dlq")
     KAFKA_RETRY_TOPIC: str = os.getenv("KAFKA_RETRY_TOPIC", "mpesa-transactions-retry")

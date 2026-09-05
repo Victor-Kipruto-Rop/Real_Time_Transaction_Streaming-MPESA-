@@ -50,6 +50,7 @@ class SafaricomTransactionProcessor:
         self.consumer = None
         self.processed_count = 0
         self.error_count = 0
+        self._message_attempts: Dict[str, int] = {}
 
         # Database configuration
         self.db_config = {
@@ -212,14 +213,13 @@ class SafaricomTransactionProcessor:
         return regions.get(prefix, "Unknown")
 
     def insert_transaction(self, transaction: Dict[str, Any]) -> bool:
-        """Insert transaction into database"""
+        """Insert transaction into database within one transactional boundary."""
         if not transaction:
             return False
 
+        cursor = None
         try:
             cursor = self.db_connection.cursor()
-
-            # Insert into raw transactions table
             insert_query = """
             INSERT INTO mpesa_transactions_raw
             (transaction_id, phone_number, amount, business_shortcode,
@@ -229,50 +229,62 @@ class SafaricomTransactionProcessor:
             ON CONFLICT (transaction_id) DO NOTHING
             """
 
-            cursor.execute(
-                insert_query,
-                (
-                    transaction["transaction_id"],
-                    transaction["phone_number"],
-                    transaction["amount"],
-                    transaction["business_shortcode"],
-                    transaction["transaction_time"],
-                    transaction["transaction_status"],
-                    transaction["payment_method"],
-                    transaction["reference"],
-                    transaction["account_reference"],
-                    transaction["merchant_id"],
-                    transaction["region"],
-                    transaction["processed_at"],
-                    transaction["raw_data"],
-                ),
-            )
+            with self.db_connection:
+                cursor.execute(
+                    insert_query,
+                    (
+                        transaction["transaction_id"],
+                        transaction["phone_number"],
+                        transaction["amount"],
+                        transaction["business_shortcode"],
+                        transaction["transaction_time"],
+                        transaction["transaction_status"],
+                        transaction["payment_method"],
+                        transaction["reference"],
+                        transaction["account_reference"],
+                        transaction["merchant_id"],
+                        transaction["region"],
+                        transaction["processed_at"],
+                        transaction["raw_data"],
+                    ),
+                )
+                inserted_rows = int(getattr(cursor, "rowcount", 0) or 0)
 
-            self.db_connection.commit()
-            self.processed_count += 1
+            if inserted_rows <= 0:
+                logger.info("Skipping duplicate transaction: %s", transaction.get("transaction_id"))
+                return False
+
+            self.processed_count += inserted_rows
 
             if self.processed_count % 100 == 0:
                 logger.info(f"Processed {self.processed_count} transactions")
 
             return True
 
-        except psycopg2.Error as e:
-            logger.error(f"Database insert error: {e}")
+        except psycopg2.IntegrityError as e:
             self.db_connection.rollback()
             self.error_count += 1
+            logger.warning("Duplicate transaction ignored by database unique constraint: %s", e)
+            get_metrics_collector().record_unique_conflict("mpesa_transactions_raw")
+            return False
+        except psycopg2.Error as e:
+            self.db_connection.rollback()
+            self.error_count += 1
+            logger.error(f"Database insert error: {e}")
             return False
         finally:
-            cursor.close()
+            if cursor is not None:
+                cursor.close()
 
     def batch_insert_transactions(self, transactions: list) -> bool:
-        """Batch insert multiple transactions"""
+        """Batch insert multiple transactions while preserving transactional safety."""
         if not transactions:
             return False
 
+        cursor = None
         try:
             cursor = self.db_connection.cursor()
 
-            # Prepare batch data
             batch_data = [
                 (
                     t["transaction_id"],
@@ -293,6 +305,9 @@ class SafaricomTransactionProcessor:
                 if t
             ]
 
+            if not batch_data:
+                return False
+
             insert_query = """
             INSERT INTO mpesa_transactions_raw
             (transaction_id, phone_number, amount, business_shortcode,
@@ -302,12 +317,29 @@ class SafaricomTransactionProcessor:
             ON CONFLICT (transaction_id) DO NOTHING
             """
 
-            if batch_data:
-                execute_values(cursor, insert_query, batch_data)
-                self.db_connection.commit()
-                self.processed_count += len(batch_data)
-                logger.info(f"Batch inserted {len(batch_data)} transactions")
+            with self.db_connection:
+                connection = getattr(cursor, "connection", None)
+                encoding = getattr(connection, "encoding", None)
+                if isinstance(encoding, str):
+                    execute_values(cursor, insert_query, batch_data)
+                else:
+                    values_sql = """
+                    INSERT INTO mpesa_transactions_raw
+                    (transaction_id, phone_number, amount, business_shortcode,
+                     transaction_time, transaction_status, payment_method,
+                     reference, account_reference, merchant_id, region, processed_at, raw_data)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (transaction_id) DO NOTHING
+                    """
+                    cursor.executemany(values_sql, batch_data)
+                inserted_rows = int(getattr(cursor, "rowcount", 0) or 0)
 
+            if inserted_rows <= 0:
+                logger.info("Batch insert produced no new rows for %s transactions", len(batch_data))
+                return False
+
+            self.processed_count += inserted_rows
+            logger.info(f"Batch inserted {inserted_rows} transactions")
             return True
 
         except psycopg2.Error as e:
@@ -316,26 +348,50 @@ class SafaricomTransactionProcessor:
             self.error_count += len(transactions)
             return False
         finally:
-            cursor.close()
+            if cursor is not None:
+                cursor.close()
 
     def _message_key_for(self, message: Dict[str, Any]) -> str:
-        value = message.get("TransID") or message.get("transaction_id") or json.dumps(message, sort_keys=True)
+        if not isinstance(message, dict):
+            return json.dumps(message, sort_keys=True, default=str)
+        value = (
+            message.get("TransID")
+            or message.get("transaction_id")
+            or json.dumps(message, sort_keys=True, default=str)
+        )
         return str(value)
+
+    def _is_duplicate_transaction(self, transaction: Dict[str, Any]) -> bool:
+        transaction_id = transaction.get("transaction_id") or transaction.get("TransID")
+        if not transaction_id:
+            return False
+        return mark_transaction_processed(transaction_id, transaction, source="kafka_consumer")
 
     def _handle_processing_error(self, message: Dict[str, Any], exc: Exception, attempts: int) -> None:
         message_key = self._message_key_for(message)
-        if attempts < self.max_retries:
+        current_attempt = self._message_attempts.get(message_key, attempts)
+        next_attempt = current_attempt + 1
+        self._message_attempts[message_key] = next_attempt
+
+        if next_attempt <= self.max_retries:
             mark_message_retry(
                 message_key=message_key,
                 topic=self.kafka_config["topic"],
-                attempts=attempts + 1,
+                attempts=next_attempt,
                 max_attempts=self.max_retries,
                 payload=message,
                 last_error=str(exc),
             )
-            logger.warning("Retrying Kafka message %s after attempt %s/%s: %s", message_key, attempts + 1, self.max_retries, exc)
+            logger.warning(
+                "Retrying Kafka message %s after attempt %s/%s: %s",
+                message_key,
+                next_attempt,
+                self.max_retries,
+                exc,
+            )
             return
 
+        self._message_attempts.pop(message_key, None)
         record_dlq_event(
             message_key=message_key,
             topic=self.kafka_config["topic"],
@@ -368,7 +424,7 @@ class SafaricomTransactionProcessor:
                     transaction = self.parse_c2b_transaction(current_message)
                     if not transaction:
                         raise ValueError("transaction payload is invalid")
-                    if mark_transaction_processed(transaction["transaction_id"], transaction, source="kafka_consumer"):
+                    if self._is_duplicate_transaction(transaction):
                         logger.info("Skipping duplicate Kafka message %s", message_key)
                         continue
 

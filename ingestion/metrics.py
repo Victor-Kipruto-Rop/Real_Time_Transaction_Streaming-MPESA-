@@ -168,6 +168,18 @@ class MetricsCollector:
             ["validation_type"],
         )
 
+        self.webhook_security_events = Counter(
+            "mpesa_webhook_security_events_total",
+            "Total blocked webhook security events",
+            ["reason"],
+        )
+
+        self.database_unique_conflicts = Counter(
+            "mpesa_database_unique_conflicts_total",
+            "Total database unique/index conflicts",
+            ["table"],
+        )
+
         # API metrics
         self.webhook_requests = Counter(
             "mpesa_webhook_requests_total",
@@ -277,6 +289,14 @@ class MetricsCollector:
     def record_validation_failure(self, validation_type: str) -> None:
         """Record validation failure."""
         self.validation_failures.labels(validation_type=validation_type).inc()
+
+    def record_webhook_security_event(self, reason: str) -> None:
+        """Record a blocked webhook event for security monitoring."""
+        self.webhook_security_events.labels(reason=reason).inc()
+
+    def record_unique_conflict(self, table_name: str = "mpesa_transactions_raw") -> None:
+        """Record a database uniqueness violation."""
+        self.database_unique_conflicts.labels(table=table_name).inc()
 
     def record_dbt_test_execution(self, status: str = "passed") -> None:
         """Record dbt test execution."""

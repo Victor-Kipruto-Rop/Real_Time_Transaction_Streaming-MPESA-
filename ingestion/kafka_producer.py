@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from threading import Lock
 from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ class MpesaKafkaProducer:
         self.retry_topic = os.getenv("KAFKA_RETRY_TOPIC", "mpesa-transactions-retry")
         self.max_retries = int(os.getenv("KAFKA_RETRY_MAX_ATTEMPTS", "3"))
         self.retry_backoff_seconds = int(os.getenv("KAFKA_RETRY_BACKOFF_SECONDS", "2"))
+        self._seen_transaction_ids: set[str] = set()
+        self._seen_lock = Lock()
 
         if Producer is None:
             raise RuntimeError(
@@ -95,6 +98,18 @@ class MpesaKafkaProducer:
             logger.warning("Event routed to DLQ topic %s: %s", self.dlq_topic, reason)
         except Exception as exc:  # pragma: no cover
             logger.error("Failed to deliver event to DLQ: %s", exc)
+
+    def _is_duplicate_transaction(self, transaction_id: Optional[str]) -> bool:
+        if not transaction_id:
+            return False
+        with self._seen_lock:
+            return transaction_id in self._seen_transaction_ids
+
+    def _mark_transaction_seen(self, transaction_id: Optional[str]) -> None:
+        if not transaction_id:
+            return
+        with self._seen_lock:
+            self._seen_transaction_ids.add(transaction_id)
 
     def publish_event(
         self,
@@ -160,11 +175,16 @@ class MpesaKafkaProducer:
             bool: True if successful, False otherwise
         """
         try:
+            transaction_id = transaction.get("TransID") or transaction.get("transaction_id")
+            if self._is_duplicate_transaction(transaction_id):
+                logger.warning("Skipping duplicate transaction publish for TransID=%s", transaction_id)
+                return False
+
             # Add metadata
             amount = transaction.get("TransAmount")
             event = {
                 "event_type": event_type,
-                "transaction_id": transaction.get("TransID"),
+                "transaction_id": transaction_id,
                 "phone_number": transaction.get("MSISDN"),
                 "amount": None if amount is None else str(amount),
                 "account_reference": transaction.get("AccountReference")
@@ -177,7 +197,10 @@ class MpesaKafkaProducer:
 
             # Use phone number as key to ensure ordering per customer
             partition_key = key or transaction.get("MSISDN")
-            return self.publish_event(event=event, topic=topic, key=partition_key)
+            success = self.publish_event(event=event, topic=topic, key=partition_key)
+            if success and transaction_id:
+                self._mark_transaction_seen(transaction_id)
+            return success
         except Exception as e:
             logger.error("Error building transaction event: %s", str(e))
             return False

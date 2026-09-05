@@ -12,16 +12,17 @@ import logging
 import os
 import time
 from datetime import datetime
-from time import time
 from typing import Any, Dict, Tuple
 
 import psycopg2
+import redis
 from flask import Flask, jsonify, redirect, request, send_from_directory
 from pythonjsonlogger import jsonlogger
 
 from app.config import settings
 from app.database.connection import init_db
 from app.database.idempotency import mark_event_seen
+from ingestion.metrics import get_metrics_collector
 from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequest
 
 init_db()
@@ -32,6 +33,23 @@ db_connection = None
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
 _REPLAY_CACHE: Dict[str, float] = {}
+
+
+def _get_redis_replay_client():
+    try:
+        client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6380")),
+            db=int(os.getenv("REDIS_DB", "0")),
+            password=os.getenv("REDIS_PASSWORD", ""),
+            decode_responses=True,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
+        client.ping()
+        return client
+    except Exception:
+        return None
 
 
 def _canonical_payload(payload: Dict[str, Any]) -> str:
@@ -65,28 +83,67 @@ def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) ->
 def _check_replay(payload: Dict[str, Any]) -> None:
     _prune_replay_cache()
     key = _get_replay_key(payload)
-    if key in _REPLAY_CACHE:
+    redis_client = _get_redis_replay_client()
+    replay_key = f"webhook:replay:{key}"
+
+    if redis_client:
+        if redis_client.exists(replay_key):
+            raise ValueError("duplicate or replayed webhook payload")
+    elif key in _REPLAY_CACHE:
         raise ValueError("duplicate or replayed webhook payload")
+
+    transaction_id = str(payload.get("TransID") or payload.get("transaction_id") or "")
     if mark_event_seen(
         event_key=key,
-        transaction_id=str(payload.get("TransID") or payload.get("transaction_id") or ""),
+        transaction_id=transaction_id,
         payload=payload,
         source="webhook",
     ):
         raise ValueError("duplicate or replayed webhook payload")
-    _REPLAY_CACHE[key] = time.monotonic()
+
+    if redis_client:
+        if not redis_client.set(replay_key, "1", ex=settings.REPLAY_TTL_SECONDS, nx=True):
+            raise ValueError("duplicate or replayed webhook payload")
+    else:
+        _REPLAY_CACHE[key] = time.monotonic()
+
+
+def _replay_backend_status() -> str:
+    if _get_redis_replay_client() is not None:
+        return "redis"
+    return "memory"
 
 
 def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
-    """Backward-compatible C2B payload validator used by tests."""
+    """Strictly validate C2B payloads for required fields, types, and safe ranges."""
     try:
-        required_fields = ["TransID", "TransAmount", "MSISDN", "TransTime"]
-        if not all(payload.get(field) for field in required_fields):
-            return False
-        datetime.strptime(str(payload.get("TransTime")), "%Y%m%d%H%M%S")
+        C2BConfirmationRequest.model_validate(payload)
         return True
     except Exception:
         return False
+
+
+def _blocked_webhook_context(payload: Dict[str, Any], reason: str) -> None:
+    client_ip = (
+        request.headers.get("X-Forwarded-For")
+        or request.remote_addr
+        or "unknown"
+    )
+    transaction_id = str(payload.get("TransID") or payload.get("transaction_id") or "")
+    signature_present = bool(
+        request.headers.get("X-Safaricom-Signature")
+        or request.headers.get("X-Signature")
+        or request.headers.get("X-Mpesa-Signature")
+    )
+    logger.warning(
+        "Blocked webhook: source_ip=%s transaction_id=%s reason=%s signature_present=%s endpoint=%s",
+        client_ip,
+        transaction_id,
+        reason,
+        signature_present,
+        request.path,
+    )
+    get_metrics_collector().record_webhook_security_event(reason)
 
 
 class WebhookProcessor:
@@ -285,7 +342,7 @@ def create_app() -> Flask:
             (forwarded_for or request.remote_addr or "unknown").split(",")[0].strip()
         )
 
-        now = time()
+        now = time.time()
         window_start, count = _RATE_STATE.get((client_ip, route_key), (now, 0))
 
         if now - window_start >= 60:
@@ -432,6 +489,12 @@ def create_app() -> Flask:
                     400,
                 )
 
+            payload = processor._validate_payload(payload)
+
+            if not validate_c2b_payload(payload):
+                get_metrics_collector().record_validation_failure("c2b_payload")
+                return jsonify({"ResultCode": 1, "ResultDesc": "Invalid payload"}), 400
+
             try:
                 signature = (
                     request.headers.get("X-Safaricom-Signature")
@@ -441,10 +504,16 @@ def create_app() -> Flask:
                 _verify_webhook_signature(payload, signature)
                 _check_replay(payload)
             except ValueError as exc:
-                logger.warning("Rejected webhook: %s", str(exc))
-                return jsonify({"ResultCode": "1", "ResultDesc": str(exc)}), 401
-
-            payload = processor._validate_payload(payload)
+                reason = str(exc)
+                _blocked_webhook_context(payload, reason)
+                get_metrics_collector().record_webhook_security_event(reason)
+                message = reason.lower()
+                auth_headers = any(
+                    request.headers.get(header)
+                    for header in ("Authorization", "X-Safaricom-Signature", "X-Signature", "X-Mpesa-Signature")
+                )
+                status = 401 if auth_headers or "invalid" in message or "missing" in message else 409 if "duplicate" in message or "replay" in message else 401
+                return jsonify({"ResultCode": "1", "ResultDesc": reason}), status
 
             logger.debug("Received C2B validation callback")
 
@@ -482,12 +551,12 @@ def create_app() -> Flask:
 
     @app.route("/webhook/c2b/confirmation", methods=["POST"])
     def c2b_confirmation():
-        started = time()
+        started = time.time()
         try:
             if _rate_limited("c2b_confirmation"):
                 status = 429
                 response = jsonify({"status": "error", "error": "rate_limited"}), status
-                WebhookMetrics.record_request(status, time() - started)
+                WebhookMetrics.record_request(status, time.time() - started)
                 return response
 
             payload = request.get_json(silent=True)
@@ -495,7 +564,16 @@ def create_app() -> Flask:
             if payload is None:
                 status = 400
                 response = jsonify({"status": "error", "error": "Invalid JSON"}), status
-                WebhookMetrics.record_request(status, time() - started)
+                WebhookMetrics.record_request(status, time.time() - started)
+                return response
+
+            payload = processor._validate_payload(payload)
+
+            if not validate_c2b_payload(payload):
+                get_metrics_collector().record_validation_failure("c2b_payload")
+                status = 400
+                response = jsonify({"ResultCode": 1, "ResultDesc": "Invalid payload"}), status
+                WebhookMetrics.record_request(status, time.time() - started)
                 return response
 
             try:
@@ -507,18 +585,20 @@ def create_app() -> Flask:
                 _verify_webhook_signature(payload, signature)
                 _check_replay(payload)
             except ValueError as exc:
-                logger.warning("Rejected webhook: %s", str(exc))
-                return jsonify({"status": "error", "error": str(exc)}), 401
-
-            payload = processor._validate_payload(payload)
+                reason = str(exc)
+                _blocked_webhook_context(payload, reason)
+                get_metrics_collector().record_webhook_security_event(reason)
+                message = reason.lower()
+                auth_headers = any(
+                    request.headers.get(header)
+                    for header in ("Authorization", "X-Safaricom-Signature", "X-Signature", "X-Mpesa-Signature")
+                )
+                status = 401 if auth_headers or "invalid" in message or "missing" in message else 409 if "duplicate" in message or "replay" in message else 401
+                response = jsonify({"status": "error", "error": reason}), status
+                WebhookMetrics.record_request(status, time.time() - started)
+                return response
 
             logger.debug("Received C2B confirmation callback")
-
-            if not validate_c2b_payload(payload):
-                status = 400
-                response = jsonify({"ResultCode": 1, "ResultDesc": "Invalid payload"}), status
-                WebhookMetrics.record_request(status, time() - started)
-                return response
 
             processor.process_c2b_confirmation(payload)
 
@@ -533,14 +613,14 @@ def create_app() -> Flask:
 
             status = 200
             response = jsonify({"ResultCode": 0, "ResultDesc": "Accepted"}), status
-            WebhookMetrics.record_request(status, time() - started)
+            WebhookMetrics.record_request(status, time.time() - started)
             return response
 
         except Exception as e:
             logger.error("Webhook confirmation error: %s", str(e))
             status = 500
             response = jsonify({"status": "error"}), status
-            WebhookMetrics.record_request(status, time() - started)
+            WebhookMetrics.record_request(status, time.time() - started)
             return response
 
     @app.route("/webhook/b2c/result", methods=["POST"])
@@ -653,12 +733,15 @@ def create_app() -> Flask:
 
     @app.route("/health", methods=["GET"])
     def health_check():
+        replay_backend = _replay_backend_status()
         return (
             jsonify(
                 {
                     "status": "healthy",
                     "timestamp": datetime.now().isoformat(),
                     "service": "mpesa-webhook-receiver",
+                    "replay_backend": replay_backend,
+                    "replay_ttl_seconds": settings.REPLAY_TTL_SECONDS,
                 }
             ),
             200,

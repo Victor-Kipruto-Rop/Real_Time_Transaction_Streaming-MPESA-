@@ -111,8 +111,8 @@ C2B_CONFIRMATION_URL=https://your-domain.com/webhook/c2b/confirmation
 C2B_VALIDATION_URL=https://your-domain.com/webhook/c2b/validation
 
 # Security
-UI_TOKEN=set_me_via_env
-WEBHOOK_SIGNING_SECRET=set_me_via_env
+UI_TOKEN=
+WEBHOOK_SIGNING_SECRET=
 ```
 
 ### 3. Generate Secure Tokens

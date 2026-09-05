@@ -14,9 +14,12 @@ class TestWebhookReceiver:
     @pytest.fixture
     def client(self):
         """Create test client"""
+        from ingestion import webhook_receiver
         from ingestion.webhook_receiver import app
 
         app.config["TESTING"] = True
+        webhook_receiver._RATE_STATE.clear()
+        webhook_receiver._REPLAY_CACHE.clear()
         with app.test_client() as client:
             yield client
 
@@ -26,6 +29,8 @@ class TestWebhookReceiver:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["status"] == "healthy"
+        assert "replay_backend" in data
+        assert data["replay_backend"] in {"redis", "memory"}
 
     def test_c2b_confirmation_endpoint(self, client, sample_mpesa_transaction):
         """Test C2B confirmation webhook"""
@@ -95,6 +100,23 @@ class TestWebhookReceiver:
 
         assert response.status_code == 400
 
+    def test_invalid_phone_and_amount_are_rejected(self, client):
+        """Malformed phone numbers and invalid amounts must be rejected before processing."""
+        invalid_payload = {
+            "TransID": "TXN-INVALID-1",
+            "TransAmount": "-50",
+            "MSISDN": "99999",
+            "TransTime": "20240601120000",
+        }
+
+        response = client.post(
+            "/webhook/c2b/confirmation",
+            data=json.dumps(invalid_payload),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+
     def test_rate_limiting(self, client, sample_mpesa_transaction):
         """Test rate limiting on webhook endpoints"""
         # Send multiple requests rapidly
@@ -148,6 +170,31 @@ class TestWebhookReceiver:
         )
 
         assert response_with_auth.status_code in [200, 401]
+
+    def test_signed_webhook_with_real_secret_is_accepted(self, client, sample_mpesa_transaction):
+        """A real webhook secret must allow the signed callback branch when enforcement is enabled."""
+        from app.config import settings
+        import hashlib
+        import hmac
+
+        settings.WEBHOOK_SIGNING_SECRET = "real-secret-123"
+        settings.REQUIRE_WEBHOOK_SIGNATURE = True
+
+        canonical = json.dumps(sample_mpesa_transaction, separators=(",", ":"), sort_keys=True, default=str)
+        signature = hmac.new(
+            settings.WEBHOOK_SIGNING_SECRET.encode("utf-8"),
+            canonical.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        response = client.post(
+            "/webhook/c2b/confirmation",
+            data=json.dumps(sample_mpesa_transaction),
+            content_type="application/json",
+            headers={"X-Safaricom-Signature": signature},
+        )
+
+        assert response.status_code == 200
 
 
 class TestWebhookMetrics:
@@ -263,6 +310,41 @@ class TestWebhookSecurity:
             )
 
             assert response1.status_code == 200
+
+    def test_invalid_payload_records_validation_metric(self, client):
+        """Invalid payloads should emit a validation metric before the request is rejected."""
+        from app.config import settings
+
+        settings.WEBHOOK_SIGNING_SECRET = "real-secret-123"
+        settings.REQUIRE_WEBHOOK_SIGNATURE = True
+
+        with patch("ingestion.webhook_receiver.get_metrics_collector") as mock_metrics:
+            response = client.post(
+                "/webhook/c2b/confirmation",
+                data=json.dumps({"TransID": "TXN-INVALID"}),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 400
+        mock_metrics.return_value.record_validation_failure.assert_called_with("c2b_payload")
+
+    def test_invalid_signature_is_rejected_and_logged(self, client, sample_mpesa_transaction):
+        """An invalid signature must fail closed and record the security event."""
+        from app.config import settings
+
+        settings.WEBHOOK_SIGNING_SECRET = "real-secret-123"
+        settings.REQUIRE_WEBHOOK_SIGNATURE = True
+
+        with patch("ingestion.webhook_receiver.get_metrics_collector") as mock_metrics:
+            response = client.post(
+                "/webhook/c2b/confirmation",
+                data=json.dumps(sample_mpesa_transaction),
+                content_type="application/json",
+                headers={"X-Safaricom-Signature": "bad-signature"},
+            )
+
+        assert response.status_code in {401, 403}
+        mock_metrics.return_value.record_webhook_security_event.assert_any_call("invalid webhook signature")
 
 
 @pytest.mark.integration

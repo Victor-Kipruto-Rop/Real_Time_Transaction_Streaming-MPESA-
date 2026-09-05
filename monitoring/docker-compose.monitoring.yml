@@ -60,7 +60,7 @@ services:
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME: "postgresql://data_engineer:set_me_via_env@postgres:5432/mpesa_analytics?sslmode=disable"
+      DATA_SOURCE_NAME: "${POSTGRES_EXPORTER_DSN:-postgresql://data_engineer@postgres:5432/mpesa_analytics?sslmode=disable}"
     restart: unless-stopped
     networks:
       - monitoring
@@ -72,7 +72,8 @@ services:
     ports:
       - "9121:9121"
     environment:
-      REDIS_ADDR: "redis:6379"
+      REDIS_ADDR: "${REDIS_ADDR:-redis:6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
     restart: unless-stopped
     networks:
       - monitoring
@@ -97,6 +98,9 @@ services:
       - "9115:9115"
     volumes:
       - ./blackbox.yml:/etc/blackbox_exporter/config.yml
+    environment:
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      ALERT_EMAIL_RECIPIENTS: "${ALERT_EMAIL_RECIPIENTS:-}"
     command:
       - '--config.file=/etc/blackbox_exporter/config.yml'
     restart: unless-stopped

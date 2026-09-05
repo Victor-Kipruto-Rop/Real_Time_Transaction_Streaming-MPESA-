@@ -2,7 +2,7 @@
 
 global:
   resolve_timeout: 5m
-  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
 
 # Templates for notifications
 templates:
@@ -89,7 +89,7 @@ receivers:
   # Default receiver
   - name: 'default'
     slack_configs:
-      - channel: '#mpesa-alerts'
+      - channel: '${SLACK_ALERT_CHANNEL:-#mpesa-alerts}'
         title: 'M-Pesa Analytics Alert'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
         send_resolved: true
@@ -97,7 +97,7 @@ receivers:
   # Critical alerts - multiple channels
   - name: 'critical-alerts'
     slack_configs:
-      - channel: '#mpesa-critical'
+      - channel: '${SLACK_CRITICAL_CHANNEL:-#mpesa-critical}'
         title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
         text: |
           *Alert:* {{ .GroupLabels.alertname }}
@@ -109,11 +109,11 @@ receivers:
         color: 'danger'
     
     email_configs:
-      - to: 'oncall@your-domain.com'
-        from: 'alerts@your-domain.com'
-        smarthost: 'smtp.gmail.com:587'
-        auth_username: 'alerts@your-domain.com'
-        auth_password: 'your-email-password'
+      - to: '${ALERT_EMAIL_RECIPIENTS}'
+        from: '${ALERT_EMAIL_SENDER:-alerts@mpesa.local}'
+        smarthost: '${SMTP_SERVER:-smtp.gmail.com}:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
         headers:
           Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
         text: |
@@ -127,13 +127,13 @@ receivers:
           {{ end }}
     
     pagerduty_configs:
-      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+      - service_key: '${PAGERDUTY_INTEGRATION_KEY}'
         description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
 
   # Warning alerts
   - name: 'warning-alerts'
     slack_configs:
-      - channel: '#mpesa-warnings'
+      - channel: '${SLACK_WARNING_CHANNEL:-#mpesa-warnings}'
         title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
         text: |
           *Alert:* {{ .GroupLabels.alertname }}
@@ -146,7 +146,7 @@ receivers:
   # Business team alerts
   - name: 'business-team'
     slack_configs:
-      - channel: '#mpesa-business'
+      - channel: '${SLACK_BUSINESS_CHANNEL:-#mpesa-business}'
         title: '📊 Business Alert: {{ .GroupLabels.alertname }}'
         text: |
           *Alert:* {{ .GroupLabels.alertname }}
@@ -155,18 +155,18 @@ receivers:
         send_resolved: true
     
     email_configs:
-      - to: 'business-team@your-domain.com'
-        from: 'alerts@your-domain.com'
-        smarthost: 'smtp.gmail.com:587'
-        auth_username: 'alerts@your-domain.com'
-        auth_password: 'your-email-password'
+      - to: '${BUSINESS_ALERT_EMAIL}'
+        from: '${ALERT_EMAIL_SENDER:-alerts@mpesa.local}'
+        smarthost: '${SMTP_SERVER:-smtp.gmail.com}:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
         headers:
           Subject: 'Business Alert: {{ .GroupLabels.alertname }}'
 
   # Database team alerts
   - name: 'database-team'
     slack_configs:
-      - channel: '#mpesa-database'
+      - channel: '${SLACK_DATABASE_CHANNEL:-#mpesa-database}'
         title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
         text: |
           *Alert:* {{ .GroupLabels.alertname }}
@@ -177,7 +177,7 @@ receivers:
   # Platform team alerts
   - name: 'platform-team'
     slack_configs:
-      - channel: '#mpesa-platform'
+      - channel: '${SLACK_PLATFORM_CHANNEL:-#mpesa-platform}'
         title: '⚙️ Platform Alert: {{ .GroupLabels.alertname }}'
         text: |
           *Alert:* {{ .GroupLabels.alertname }}

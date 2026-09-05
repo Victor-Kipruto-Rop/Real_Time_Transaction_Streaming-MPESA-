@@ -3,9 +3,27 @@ Pytest configuration and shared fixtures for M-Pesa Analytics Platform tests
 """
 
 import os
+import uuid
+
+os.environ.setdefault("USE_SQLITE_FOR_TESTS", "1")
+
 import pytest
 from unittest.mock import Mock, MagicMock
 from typing import Generator
+
+from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def reset_security_settings():
+    """Keep the singleton settings safe between tests."""
+    original_secret = settings.WEBHOOK_SIGNING_SECRET
+    original_require = settings.REQUIRE_WEBHOOK_SIGNATURE
+    settings.WEBHOOK_SIGNING_SECRET = ""
+    settings.REQUIRE_WEBHOOK_SIGNATURE = False
+    yield
+    settings.WEBHOOK_SIGNING_SECRET = original_secret
+    settings.REQUIRE_WEBHOOK_SIGNATURE = original_require
 
 
 @pytest.fixture
@@ -49,9 +67,10 @@ def mock_kafka_producer():
 
 @pytest.fixture
 def sample_mpesa_transaction():
-    """Sample M-Pesa transaction data"""
+    """Sample M-Pesa transaction data."""
+    txn_id = f"TXN-{uuid.uuid4().hex[:16]}"
     return {
-        "TransID": "TXN123456789",
+        "TransID": txn_id,
         "TransAmount": "1000.00",
         "MSISDN": "254712345678",
         "AccountReference": "ACC001",
@@ -96,8 +115,11 @@ def docker_compose_file(pytestconfig):
 @pytest.fixture
 def client():
     """Shared Flask test client fixture."""
+    from ingestion import webhook_receiver
     from ingestion.webhook_receiver import app
 
     app.config["TESTING"] = True
+    webhook_receiver._RATE_STATE.clear()
+    webhook_receiver._REPLAY_CACHE.clear()
     with app.test_client() as test_client:
         yield test_client

@@ -36,6 +36,21 @@ def test_rejects_insecure_default_secrets():
         )
 
 
+def test_explicit_real_secret_enables_signature_enforcement(monkeypatch):
+    monkeypatch.delenv("WEBHOOK_SIGNING_SECRET", raising=False)
+    monkeypatch.delenv("REQUIRE_WEBHOOK_SIGNATURE", raising=False)
+    monkeypatch.setenv("WEBHOOK_SIGNING_SECRET", "real-secret-123")
+    monkeypatch.setenv("REQUIRE_WEBHOOK_SIGNATURE", "true")
+
+    import app.config as config_module
+    import importlib
+
+    importlib.reload(config_module)
+
+    assert config_module.settings.WEBHOOK_SIGNING_SECRET == "real-secret-123"
+    assert config_module.settings.REQUIRE_WEBHOOK_SIGNATURE is True
+
+
 def test_webhook_signature_is_canonical_and_order_independent():
     settings.WEBHOOK_SIGNING_SECRET = "canonical-signature-secret"
     settings.REQUIRE_WEBHOOK_SIGNATURE = True

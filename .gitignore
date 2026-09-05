@@ -138,3 +138,4 @@ terraform/*.tfstate.*
 kubernetes/secret.yaml
 scripts/connect_rds.sh
 kubernetes/*.generated.yaml
+backups/*.sql
