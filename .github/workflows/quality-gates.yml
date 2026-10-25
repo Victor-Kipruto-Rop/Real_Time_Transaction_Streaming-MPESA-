@@ -34,7 +34,7 @@ jobs:
           python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5"
 
       - name: Compile Python files
-        run: python -m compileall -q app ingestion schemas streaming tests alembic
+        run: python -m compileall -q app ingestion schemas streaming tests alembic scripts
 
       - name: Run unit and contract tests
         run: >-
