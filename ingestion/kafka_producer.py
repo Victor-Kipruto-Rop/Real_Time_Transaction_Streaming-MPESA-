@@ -132,14 +132,26 @@ class MpesaKafkaProducer:
                 payload = (
                     event.model_dump(mode="json") if hasattr(event, "model_dump") else event
                 )
+                delivery = {"done": False, "error": None}
+
+                def on_delivery(err, msg):
+                    delivery["done"] = True
+                    delivery["error"] = str(err) if err is not None else None
+                    self._delivery_report(err, msg)
+
                 self._producer.produce(
                     target_topic,
                     value=json.dumps(payload).encode("utf-8"),
                     key=key.encode("utf-8") if key else None,
-                    on_delivery=self._delivery_report,
+                    on_delivery=on_delivery,
                 )
-                self._producer.poll(0)
-                self._producer.flush(5)
+                remaining = self._producer.flush(10)
+                if remaining:
+                    raise TimeoutError(f"{remaining} Kafka message(s) were not delivered before timeout")
+                if not delivery["done"]:
+                    raise TimeoutError("Kafka delivery callback did not complete")
+                if delivery["error"]:
+                    raise RuntimeError(f"Kafka delivery failed: {delivery['error']}")
                 return True
             except Exception as e:
                 if attempt <= self.max_retries:
