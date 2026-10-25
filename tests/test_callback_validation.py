@@ -144,3 +144,26 @@ def test_b2c_application_logs_do_not_include_conversation_ids_or_descriptions(ca
 
     assert "CUSTOMER_PRIVATE_RESULT_DESCRIPTION" not in caplog.text
     assert "CUSTOMER_PRIVATE_CONVERSATION_ID" not in caplog.text
+
+
+
+def test_configured_redis_outage_fails_closed_for_rate_limited_route(monkeypatch):
+    import ingestion.webhook_receiver as receiver
+
+    class UnavailableRedis:
+        def incr(self, _key):
+            raise ConnectionError("synthetic Redis outage")
+
+    monkeypatch.setenv("REDIS_URL", "redis://fake/2")
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "10")
+    monkeypatch.setattr(receiver.Redis, "from_url", lambda *args, **kwargs: UnavailableRedis())
+    client = receiver.create_app().test_client()
+    response = client.post("/webhook/b2c/result", json={
+        "Result": {
+            "ResultCode": 0,
+            "ResultDesc": "Processed",
+            "ConversationID": "SYNTHETIC-CONVERSATION",
+            "OriginatorConversationID": "SYNTHETIC-ORIGINATOR",
+        }
+    })
+    assert response.status_code == 429
