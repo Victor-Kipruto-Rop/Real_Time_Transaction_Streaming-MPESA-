@@ -101,8 +101,8 @@ class CallbackEvent(Base):
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     topic: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    partition: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    partition_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    message_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
