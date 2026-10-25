@@ -186,10 +186,7 @@ class WebhookProcessor:
         try:
             C2BConfirmationRequest.model_validate(payload)
 
-            transaction_id = payload.get("TransID")
-            amount = payload.get("TransAmount")
             phone = payload.get("MSISDN")
-            timestamp = payload.get("TransTime")
 
             logger.info(
                 "C2B Confirmation callback received; phone=%s",
