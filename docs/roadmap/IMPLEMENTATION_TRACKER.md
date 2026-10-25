@@ -34,7 +34,7 @@
 1. Webhook validates callback shape and configured custom HMAC policy.
 2. PostgreSQL `event_outbox` inserts one row under a stable callback-scoped key; the HTTP handler only acknowledges after commit.
 3. `outbox-relay` publishes pending rows and marks them published only after the Kafka delivery callback confirms success. Failed sends return to pending with exponential backoff and a lease permits recovery after relay restarts.
-4. Consumer writes every accepted callback to `mpesa_callback_events`; C2B events also upsert `mpesa_transactions_raw`.
+4. Consumer writes every accepted callback to `mpesa_callback_events`; only C2B confirmations upsert `mpesa_transactions_raw` because validation is not proof of payment.
 5. Invalid Kafka messages are written to `kafka_dead_letters` before their offsets are committed. If DLQ persistence fails, the offset is retained.
 
 Delivery is at-least-once, not exactly-once. A process crash after broker delivery but before marking the outbox row published may produce a duplicate, which is why event identity and consumer idempotency remain required.
