@@ -7,6 +7,7 @@ into Postgres (`mpesa_transactions_raw`) for downstream dbt models.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -190,8 +191,37 @@ class MpesaKafkaConsumer:
 
         try:
             transaction_time = _parse_transaction_time(event.transaction_time)
+            event_payload = event.model_dump(mode="json")
+            event_key = event.event_key or hashlib.sha256(
+                json.dumps(event_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
             with self._get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO mpesa_callback_events
+                          (event_key, event_type, source, payload)
+                        VALUES (%s, %s, %s, %s::json)
+                        ON CONFLICT (event_key) DO NOTHING
+                        """,
+                        (
+                            event_key,
+                            event.event_type,
+                            event.source,
+                            json.dumps(event_payload),
+                        ),
+                    )
+
+                    # Every callback family is retained for audit. Only C2B
+                    # callbacks represent ledger transaction rows in this table.
+                    if event.event_type not in {"c2b_validation", "c2b_confirmation"}:
+                        conn.commit()
+                        logger.info("Persisted callback event: %s", event.event_type)
+                        return True
+
+                    if not event.transaction_id:
+                        raise ValueError("C2B callback is missing transaction_id")
+
                     cur.execute(
                         """
                         INSERT INTO mpesa_transactions_raw
@@ -230,6 +260,40 @@ class MpesaKafkaConsumer:
                     return True
         except Exception as e:
             logger.error("Failed to insert transaction: %s", e)
+            return False
+
+    def _persist_dead_letter(self, msg: Any, error: Exception) -> bool:
+        """Persist a poison message before committing its Kafka offset."""
+        if not self._db_pool:
+            return False
+        try:
+            raw = msg.value()
+            raw_text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+            key_value = msg.key()
+            key_text = key_value.decode("utf-8", errors="replace") if isinstance(key_value, bytes) else (str(key_value) if key_value is not None else None)
+            with self._get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO kafka_dead_letters
+                          (topic, partition, offset, message_key, raw_value, error_type, error_message, attempts, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 1, 'pending')
+                        ON CONFLICT (topic, partition, offset) DO NOTHING
+                        """,
+                        (
+                            msg.topic(),
+                            msg.partition(),
+                            msg.offset(),
+                            key_text,
+                            raw_text,
+                            type(error).__name__,
+                            str(error)[:4000],
+                        ),
+                    )
+                conn.commit()
+            return True
+        except Exception:
+            logger.exception("Failed to persist Kafka dead-letter record")
             return False
 
     def consume_messages(self, max_messages: Optional[int] = None) -> int:
@@ -277,11 +341,15 @@ class MpesaKafkaConsumer:
                         event.transaction_id,
                     )
                 except Exception as e:
-                    # Do not silently auto-commit malformed messages. Until a
-                    # durable DLQ path is wired for this consumer, stop and retain
-                    # the offset so the failure can be investigated.
-                    logger.error("Invalid event; offset not committed: %s", e)
-                    break
+                    # Poison messages are moved to a durable PostgreSQL DLQ first.
+                    # Commit only after that write succeeds; if PostgreSQL is down,
+                    # leave the Kafka offset uncommitted so the record can retry.
+                    logger.error("Invalid event; attempting durable DLQ: %s", e)
+                    if not self._persist_dead_letter(msg, e):
+                        logger.error("DLQ persistence failed; retaining Kafka offset")
+                        break
+                    self.consumer.commit(message=msg, asynchronous=False)
+                    count += 1
 
         except KeyboardInterrupt:
             logger.info("Consumer interrupted by user")
