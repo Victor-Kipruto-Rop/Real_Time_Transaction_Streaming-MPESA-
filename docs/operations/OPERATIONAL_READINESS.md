@@ -27,7 +27,7 @@ Start with 1–5 users, confirm database and Kafka processing, then increase gra
 export POSTGRES_HOST=localhost POSTGRES_PORT=5433
 export POSTGRES_DB=mpesa_analytics POSTGRES_USER=data_engineer
 export POSTGRES_PASSWORD='your-local-only-password'
-BACKUP_DIR=backups ./scripts/backup_postgres.sh
+BACKUP_DIR=backups bash scripts/backup_postgres.sh
 ```
 
 Store backups encrypted and access-controlled in real deployments; the local script creates a mode-600 dump and checksum but does not provide off-site storage or encryption at rest.
@@ -42,7 +42,7 @@ Store backups encrypted and access-controlled in real deployments; the local scr
 
 ```bash
 RESTORE_TARGET_DATABASE_URL='postgresql://user:pass@localhost:5433/mpesa_restore_test' \
-CONFIRM_RESTORE=YES ./scripts/restore_postgres.sh backups/mpesa_YYYYMMDDTHHMMSSZ.dump
+CONFIRM_RESTORE=YES bash scripts/restore_postgres.sh backups/mpesa_YYYYMMDDTHHMMSSZ.dump
 ```
 
 The restore script does not drop or clean target tables. Use an empty target database.
@@ -52,7 +52,7 @@ The restore script does not drop or clean target tables. Use an empty target dat
 After migrations and services start, run:
 
 ```bash
-BASE_URL=http://localhost:5000 ./scripts/verify_deployment.sh
+BASE_URL=http://localhost:5000 bash scripts/verify_deployment.sh
 ```
 
 Then verify that the outbox relay is running, submit one uniquely identified synthetic callback, confirm its outbox row reaches `published`, confirm the consumer writes the callback audit and (for C2B) raw transaction row, and test that a malformed Kafka message is persisted to the dead-letter table before its offset advances.
