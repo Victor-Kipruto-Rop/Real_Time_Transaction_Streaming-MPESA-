@@ -5,15 +5,15 @@
 
 | Phase | Scope | Status | Gate to close |
 |---|---|---|---|
-| 0 | Repository audit and baseline | In progress | Inventory, issue register, runtime contract, reproducible baseline and CI status |
-| 1 | Configuration, installation and startup reliability | In progress | Fresh clone configures cleanly; Compose validates; services become healthy |
+| 0 | Repository audit and baseline | In progress | Initial audit, inventory, issue register and baseline-status docs added; full tree/runtime verification pending |
+| 1 | Configuration, installation and startup reliability | In progress | PostgreSQL healthcheck quoting fixed; Compose now requires explicit DB/Grafana passwords; CI Compose validation added but not yet confirmed passing |
 | 2 | Architecture and code quality | Not started | Canonical entry points, module boundaries, supported Python version and dependency contract |
-| 3 | Webhook security and input validation | Not started | Documented trust model, payload limits/schema tests, security-mode tests |
+| 3 | Webhook security and input validation | In progress | Trust model documented; request body bounded; forwarded IP spoofing reduced; UI disabled without token; callback-family coverage and runtime tests remain |
 | 4 | Idempotency and data integrity | Not started | Durable uniqueness, concurrency tests, correct event/transaction identity semantics |
 | 5 | Kafka reliability and recovery | Not started | Producer/consumer failure tests, retry/DLQ/replay and offset semantics verified |
 | 6 | PostgreSQL persistence, migrations and recovery | Not started | Migrations, constraints, indexes and backup/restore exercise |
 | 7 | Data quality, reconciliation and dbt analytics | Not started | Tested lineage and models; reconciliation source of truth documented |
-| 8 | Automated testing and CI | In progress | Required checks run on PRs; failures are visible; integration tests cover critical paths |
+| 8 | Automated testing and CI | In progress | Added syntax/Compose workflow and focused config regression tests; latest passing CI result is not yet available |
 | 9 | Observability and operational monitoring | Not started | Correlated logs, metrics, actionable alerts and tested runbooks |
 | 10 | Load testing and performance engineering | Not started | Reproducible workload/results with environment and limitations documented |
 | 11 | Deployment, security audit and disaster recovery | Not started | Staging validation, security/dependency review, rollback and restore evidence |
