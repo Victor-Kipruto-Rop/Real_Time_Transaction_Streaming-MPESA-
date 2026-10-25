@@ -149,8 +149,11 @@ services:
       REQUIRE_WEBHOOK_SIGNATURE: ${REQUIRE_WEBHOOK_SIGNATURE:-false}
       REPLAY_TTL_SECONDS: ${REPLAY_TTL_SECONDS:-300}
       RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-120}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/2}
     depends_on:
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
