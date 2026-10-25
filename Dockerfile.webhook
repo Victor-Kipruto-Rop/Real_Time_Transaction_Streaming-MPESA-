@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir --default-timeout=1000 -r base.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r cloud.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r ml.txt
 
+COPY app ./app
 COPY ingestion ./ingestion
 COPY schemas ./schemas
 
