@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 import psycopg2
@@ -35,6 +35,10 @@ OUTBOX_STATUS_GAUGE = Gauge(
     "mpesa_outbox_events",
     "Outbox event count by delivery status",
     ["status"],
+)
+OUTBOX_OLDEST_PENDING_GAUGE = Gauge(
+    "mpesa_outbox_oldest_pending_seconds",
+    "Age in seconds of the oldest pending outbox event",
 )
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
@@ -678,22 +682,38 @@ def create_app() -> Flask:
             logger.error("STK callback error: %s", str(e))
             return jsonify({"status": "error"}), 500
 
+    def _refresh_outbox_metrics():
+        with SessionLocal() as session:
+            status_rows = session.execute(
+                select(OutboxEvent.status, func.count()).group_by(OutboxEvent.status)
+            ).all()
+            oldest_pending = session.execute(
+                select(func.min(OutboxEvent.created_at)).where(OutboxEvent.status == "pending")
+            ).scalar_one()
+        counts = {str(status): int(count) for status, count in status_rows}
+        for status in ("pending", "publishing", "published"):
+            OUTBOX_STATUS_GAUGE.labels(status=status).set(counts.get(status, 0))
+        if oldest_pending is None:
+            age_seconds = 0.0
+        else:
+            if oldest_pending.tzinfo is None:
+                oldest_pending = oldest_pending.replace(tzinfo=timezone.utc)
+            age_seconds = max(0.0, (datetime.now(timezone.utc) - oldest_pending).total_seconds())
+        OUTBOX_OLDEST_PENDING_GAUGE.set(age_seconds)
+        counts["oldest_pending_seconds"] = age_seconds
+        return counts
+
     @app.route("/ready", methods=["GET"])
     def readiness_check():
         try:
-            with SessionLocal() as session:
-                status_rows = session.execute(
-                    select(OutboxEvent.status, func.count()).group_by(OutboxEvent.status)
-                ).all()
-            counts = {str(status): int(count) for status, count in status_rows}
-            for status in ("pending", "publishing", "published"):
-                OUTBOX_STATUS_GAUGE.labels(status=status).set(counts.get(status, 0))
+            counts = _refresh_outbox_metrics()
             return jsonify({
                 "status": "ready",
                 "database": "ok",
                 "outbox_pending": counts.get("pending", 0),
                 "outbox_publishing": counts.get("publishing", 0),
                 "outbox_published": counts.get("published", 0),
+                "outbox_oldest_pending_seconds": counts.get("oldest_pending_seconds", 0.0),
                 "delivery_backend": "postgres_outbox",
             }), 200
         except Exception:
@@ -704,6 +724,7 @@ def create_app() -> Flask:
     def prometheus_metrics():
         try:
             from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+            _refresh_outbox_metrics()
             return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
         except ImportError:
             return jsonify({"error": "metrics_dependency_unavailable"}), 503
