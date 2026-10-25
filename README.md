@@ -144,6 +144,8 @@ The integration tests are evidence only when they actually pass in the target en
 
 ## Operational documentation
 
+- [docs/operations/OPERATIONAL_READINESS.md](docs/operations/OPERATIONAL_READINESS.md) — readiness, load testing, backup/restore and deployment verification
+
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — detailed architecture and responsibilities
 - [docs/PRODUCTION_RUNBOOK.md](docs/PRODUCTION_RUNBOOK.md) — release and deployment process
 - [docs/ROLLBACK_CHECKLIST.md](docs/ROLLBACK_CHECKLIST.md) — rollback procedure and verification
