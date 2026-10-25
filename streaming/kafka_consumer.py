@@ -212,15 +212,16 @@ class MpesaKafkaConsumer:
                         ),
                     )
 
-                    # Every callback family is retained for audit. Only C2B
-                    # callbacks represent ledger transaction rows in this table.
-                    if event.event_type not in {"c2b_validation", "c2b_confirmation"}:
+                    # Every callback family is retained for audit. C2B validation
+                    # is a pre-transaction decision, not proof of a received payment;
+                    # only a C2B confirmation may update the transaction ledger table.
+                    if event.event_type != "c2b_confirmation":
                         conn.commit()
-                        logger.info("Persisted callback event: %s", event.event_type)
+                        logger.info("Persisted callback audit event: %s", event.event_type)
                         return True
 
                     if not event.transaction_id:
-                        raise ValueError("C2B callback is missing transaction_id")
+                        raise ValueError("C2B confirmation is missing transaction_id")
 
                     cur.execute(
                         """
