@@ -15,11 +15,14 @@ from datetime import datetime
 from typing import Any, Dict, Tuple
 
 import psycopg2
-from flask import Flask, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 from pythonjsonlogger import jsonlogger
 
 from app.config import settings
+from app.database.connection import SessionLocal
+from app.database.models import OutboxEvent
 from app.database.outbox import enqueue_callback
+from sqlalchemy import func, select
 from ingestion.metrics import get_metrics_collector
 from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequest
 
@@ -668,6 +671,31 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error("STK callback error: %s", str(e))
             return jsonify({"status": "error"}), 500
+
+    @app.route("/ready", methods=["GET"])
+    def readiness_check():
+        try:
+            with SessionLocal() as session:
+                pending = session.execute(
+                    select(func.count()).select_from(OutboxEvent).where(OutboxEvent.status == "pending")
+                ).scalar_one()
+            return jsonify({
+                "status": "ready",
+                "database": "ok",
+                "outbox_pending": int(pending),
+                "delivery_backend": "postgres_outbox",
+            }), 200
+        except Exception:
+            logger.exception("Readiness check failed")
+            return jsonify({"status": "not_ready", "database": "unavailable"}), 503
+
+    @app.route("/metrics", methods=["GET"])
+    def prometheus_metrics():
+        try:
+            from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+            return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+        except ImportError:
+            return jsonify({"error": "metrics_dependency_unavailable"}), 503
 
     @app.route("/health", methods=["GET"])
     def health_check():
