@@ -85,6 +85,24 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    container_name: mpesa_db_migrate
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
+      USE_SQLITE_FOR_TESTS: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   webhook-receiver:
     build:
       context: .
@@ -134,11 +152,34 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./ingestion:/app/ingestion:ro
       - ./schemas:/app/schemas:ro
+
+  outbox-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    container_name: mpesa_outbox_relay
+    command: ["python", "-m", "app.database.outbox"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-mpesa-transactions}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
+      OUTBOX_IDLE_SECONDS: ${OUTBOX_IDLE_SECONDS:-1}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   kafka-consumer:
     build:
@@ -158,8 +199,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./streaming:/app/streaming:ro
       - ./schemas:/app/schemas:ro
