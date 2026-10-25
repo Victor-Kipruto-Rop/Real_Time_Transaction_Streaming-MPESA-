@@ -31,42 +31,34 @@ def test_transaction_idempotency_is_persisted():
     assert is_duplicate_transaction(transaction_id, payload, source="webhook") is False
 
 
-def test_ensure_transaction_id_unique_index_deduplicates_existing_rows():
-    init_db()
-    with engine.begin() as conn:
-        conn.execute(text("DROP INDEX IF EXISTS uq_mpesa_transactions_raw_transaction_id"))
+def test_ensure_transaction_id_unique_index_preserves_duplicate_rows(monkeypatch):
+    import pytest
+    from sqlalchemy import create_engine
+    import app.database.connection as connection
+
+    test_engine = create_engine("sqlite://")
+    monkeypatch.setattr(connection, "engine", test_engine)
+    with test_engine.begin() as conn:
+        conn.execute(text(connection._raw_transactions_table_ddl("sqlite")))
         conn.execute(
             text(
-                """
-                DELETE FROM mpesa_transactions_raw
-                WHERE transaction_id IN ('TXN-DUP-DEDUP-1', 'TXN-DUP-DEDUP-2')
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                INSERT INTO mpesa_transactions_raw (
-                    transaction_id, phone_number, amount, transaction_time,
-                    transaction_status, payment_method, reference,
-                    account_reference, merchant_id, region, processed_at, raw_data
-                ) VALUES
-                    ('TXN-DUP-DEDUP-1', '254712345678', 1000, '20260613120000', 'completed', 'c2b', 'REF1', 'ACC1', '174379', 'Nairobi', '2026-06-13T12:00:00', '{\"TransID\":\"TXN-DUP-DEDUP-1\"}'),
-                    ('TXN-DUP-DEDUP-1', '254712345678', 1000, '20260613120000', 'completed', 'c2b', 'REF1', 'ACC1', '174379', 'Nairobi', '2026-06-13T12:00:00', '{\"TransID\":\"TXN-DUP-DEDUP-1\"}')
-                """
+                "INSERT INTO mpesa_transactions_raw (transaction_id, amount) "
+                "VALUES ('TXN-DUP-DEDUP-1', 10), ('TXN-DUP-DEDUP-1', 20)"
             )
         )
 
-    from app.database.connection import ensure_transaction_id_unique_index
+    with pytest.raises(RuntimeError, match="Duplicate transaction_id"):
+        connection.ensure_transaction_id_unique_index()
 
-    ensure_transaction_id_unique_index()
-
-    with engine.connect() as conn:
+    with test_engine.connect() as conn:
         remaining = conn.execute(
-            text("SELECT COUNT(*) FROM mpesa_transactions_raw WHERE transaction_id = 'TXN-DUP-DEDUP-1'")
+            text(
+                "SELECT COUNT(*) FROM mpesa_transactions_raw "
+                "WHERE transaction_id = 'TXN-DUP-DEDUP-1'"
+            )
         ).scalar_one()
-        assert remaining == 1
-
+    assert remaining == 2
+    test_engine.dispose()
 
 def test_kafka_message_state_tracks_retries_and_failures():
     init_db()
