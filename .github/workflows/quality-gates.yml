@@ -98,6 +98,9 @@ jobs:
       - name: Apply versioned database migrations
         run: alembic upgrade head 2>&1 | tee artifacts/alembic-upgrade.log
 
+      - name: Verify migration is repeatable
+        run: alembic upgrade head 2>&1 | tee artifacts/alembic-upgrade-repeat.log
+
       - name: Run full callback-to-Kafka-to-PostgreSQL and DLQ tests
         run: |
           mkdir -p artifacts
@@ -138,6 +141,12 @@ jobs:
           echo "Restored Alembic revision: $revision" | tee artifacts/restore-verification.log
           PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -p 5433 -U "$POSTGRES_USER" -d mpesa_restore_test -c 'SELECT COUNT(*) AS callback_events FROM mpesa_callback_events; SELECT COUNT(*) AS outbox_events FROM event_outbox; SELECT COUNT(*) AS dead_letters FROM kafka_dead_letters;' | tee -a artifacts/restore-verification.log
 
+      - name: Capture service status and logs on failure
+        if: failure()
+        run: |
+          docker compose ps 2>&1 | tee artifacts/compose-ps-on-failure.log
+          docker compose logs --no-color postgres kafka zookeeper 2>&1 | tee artifacts/compose-services-on-failure.log
+
       - name: Upload reproducible CI evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,10 +155,6 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Show service status on failure
-        if: failure()
-        run: docker compose ps && docker compose logs --no-color postgres kafka zookeeper
 
       - name: Stop disposable services
         if: always()
