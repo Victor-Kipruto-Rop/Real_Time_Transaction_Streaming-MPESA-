@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterator, Optional
 from psycopg2 import pool
 
 from schemas.transaction_schema import MpesaEvent
+from prometheus_client import Counter, Gauge, start_http_server
 
 try:
     from confluent_kafka import Consumer, KafkaException
@@ -27,6 +28,25 @@ except Exception:  # pragma: no cover
     KafkaException = Exception  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+CONSUMER_MESSAGES_TOTAL = Counter(
+    "mpesa_consumer_messages_total",
+    "Kafka messages durably handled by outcome",
+    ["outcome"],
+)
+CONSUMER_DB_FAILURES_TOTAL = Counter(
+    "mpesa_consumer_database_failures_total",
+    "Consumer database persistence failures",
+)
+CONSUMER_DLQ_TOTAL = Counter(
+    "mpesa_kafka_dead_letters_total",
+    "Poison Kafka messages persisted to the durable dead-letter table",
+)
+CONSUMER_LAG_GAUGE = Gauge(
+    "mpesa_kafka_consumer_lag",
+    "Estimated Kafka consumer lag by topic and partition",
+    ["topic", "partition"],
+)
 
 _DARAJA_TIME_FORMAT = "%Y%m%d%H%M%S"
 
@@ -267,6 +287,7 @@ class MpesaKafkaConsumer:
                     # to commit this Kafka offset.
                     return True
         except Exception as e:
+            CONSUMER_DB_FAILURES_TOTAL.inc()
             logger.error("Failed to insert transaction: %s", e)
             return False
 
@@ -299,8 +320,10 @@ class MpesaKafkaConsumer:
                         ),
                     )
                 conn.commit()
+            CONSUMER_DLQ_TOTAL.inc()
             return True
         except Exception:
+            CONSUMER_DB_FAILURES_TOTAL.inc()
             logger.exception("Failed to persist Kafka dead-letter record")
             return False
 
@@ -342,6 +365,7 @@ class MpesaKafkaConsumer:
                         break
 
                     self.consumer.commit(message=msg, asynchronous=False)
+                    CONSUMER_MESSAGES_TOTAL.labels(outcome="handled").inc()
                     count += 1
                     logger.info(
                         "Handled event: %s / %s",
@@ -357,6 +381,7 @@ class MpesaKafkaConsumer:
                         logger.error("DLQ persistence failed; retaining Kafka offset")
                         break
                     self.consumer.commit(message=msg, asynchronous=False)
+                    CONSUMER_MESSAGES_TOTAL.labels(outcome="dead_lettered").inc()
                     count += 1
 
         except KeyboardInterrupt:
@@ -397,6 +422,9 @@ class MpesaKafkaConsumer:
                 high_water_mark = self.consumer.get_watermark_offsets(partition)[1]
                 lag = high_water_mark - current_offset if current_offset else 0
                 lag_dict[partition.partition] = lag
+                CONSUMER_LAG_GAUGE.labels(
+                    topic=self.topic, partition=str(partition.partition)
+                ).set(max(0, lag))
 
             return lag_dict
         except Exception as e:
@@ -458,6 +486,9 @@ def run_consumer(config: ConsumerConfig, max_messages: Optional[int] = None) -> 
 
 
 if __name__ == "__main__":
+    metrics_port = int(os.getenv("KAFKA_CONSUMER_METRICS_PORT", "8080"))
+    start_http_server(metrics_port)
+    logger.info("Prometheus metrics server listening on port %s", metrics_port)
     cfg = ConsumerConfig(
         brokers=os.getenv("KAFKA_BROKERS", "localhost:9092"),
         topic=os.getenv("KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions"),
