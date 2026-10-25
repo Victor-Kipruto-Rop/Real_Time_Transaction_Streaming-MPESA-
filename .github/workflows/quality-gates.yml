@@ -28,8 +28,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install focused configuration-test dependencies
+        run: python -m pip install "pydantic==2.5.0" "pydantic-settings==2.1.0" "python-dotenv==1.0.0" "pytest==8.3.5"
+
       - name: Compile Python files
         run: python -m compileall -q .
+
+      - name: Run configuration security regression tests
+        run: python -m pytest -q tests/test_config_security.py
 
       - name: Validate Docker Compose configuration
         run: docker compose -f docker-compose.yml config --quiet
