@@ -108,18 +108,22 @@ def ensure_transaction_id_unique_index() -> None:
                     "ALTER TABLE mpesa_transactions_raw ADD COLUMN received_at TIMESTAMP"
                 ))
 
-            # SQLite does not automatically clean historical duplicates before a
-            # unique index is created. Remove duplicates first.
-            conn.execute(text("""
-                WITH ranked AS (
-                    SELECT id,
-                           ROW_NUMBER() OVER (PARTITION BY transaction_id ORDER BY id) AS rn
-                    FROM mpesa_transactions_raw
-                    WHERE transaction_id IS NOT NULL
+            # Never delete or silently choose between historical financial records.
+            # Fail explicitly so an operator can reconcile duplicates before adding
+            # the uniqueness constraint.
+            duplicate = conn.execute(text("""
+                SELECT transaction_id, COUNT(*) AS record_count
+                FROM mpesa_transactions_raw
+                WHERE transaction_id IS NOT NULL
+                GROUP BY transaction_id
+                HAVING COUNT(*) > 1
+                LIMIT 1
+            """)).first()
+            if duplicate:
+                raise RuntimeError(
+                    "Duplicate transaction_id values prevent unique index creation; "
+                    "reconcile the records explicitly before retrying"
                 )
-                DELETE FROM mpesa_transactions_raw
-                WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
-            """))
 
         conn.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS uq_mpesa_transactions_raw_transaction_id
