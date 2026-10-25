@@ -21,7 +21,6 @@ from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 import os
 
-from app.database.connection import init_db
 from app.database.idempotency import (
     mark_message_retry,
     mark_transaction_processed,
@@ -74,7 +73,7 @@ class SafaricomTransactionProcessor:
         self.max_retries = int(os.getenv("KAFKA_RETRY_MAX_ATTEMPTS", "3"))
         self.retry_backoff_seconds = int(os.getenv("KAFKA_RETRY_BACKOFF_SECONDS", "2"))
 
-        init_db()
+        # Schema creation is intentionally not performed here; run Alembic migrations first.
         self._connect_db()
         self._connect_kafka()
 
