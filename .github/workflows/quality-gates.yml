@@ -35,7 +35,7 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run configuration security regression tests
-        run: python -m pytest -q tests/test_config_security.py tests/test_database_ddl.py
+        run: python -m pytest -q tests/test_config_security.py tests/test_database_ddl.py tests/test_event_identity.py
 
       - name: Prepare non-production validation environment
         run: |
