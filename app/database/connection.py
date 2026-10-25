@@ -40,51 +40,67 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, futu
 
 def _raw_transactions_table_ddl(dialect_name: str) -> str:
     """Return table DDL valid for the supported SQLite and PostgreSQL dialects."""
-    common_columns = """
-        transaction_id VARCHAR(128) NOT NULL,
-        phone_number VARCHAR(32),
-        amount NUMERIC(18,2),
-        business_shortcode VARCHAR(64),
-        transaction_time VARCHAR(32),
-        transaction_status VARCHAR(32),
-        payment_method VARCHAR(32),
-        reference VARCHAR(128),
-        account_reference VARCHAR(128),
-        merchant_id VARCHAR(128),
-        region VARCHAR(64),
-        processed_at TIMESTAMP,
-        raw_data TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    if dialect_name not in {"sqlite", "postgresql"}:
+        raise ValueError(
+            f"Unsupported database dialect for raw transaction bootstrap: {dialect_name}"
+        )
+    payload_type = "TEXT" if dialect_name == "sqlite" else "JSONB"
+    id_type = "INTEGER PRIMARY KEY AUTOINCREMENT" if dialect_name == "sqlite" else "BIGSERIAL PRIMARY KEY"
+    return f"""
+        CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
+            id {id_type},
+            transaction_id VARCHAR(128) NOT NULL,
+            phone_number VARCHAR(32),
+            amount NUMERIC(18,2),
+            business_shortcode VARCHAR(64),
+            transaction_time TIMESTAMP,
+            transaction_status VARCHAR(32),
+            payment_method VARCHAR(32),
+            reference VARCHAR(128),
+            account_reference VARCHAR(128),
+            merchant_id VARCHAR(128),
+            region VARCHAR(64),
+            source VARCHAR(64),
+            payload {payload_type},
+            processed_at TIMESTAMP,
+            raw_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
     """
-    if dialect_name == "sqlite":
-        return f"""
-            CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {common_columns}
-            )
-        """
-    if dialect_name == "postgresql":
-        return f"""
-            CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
-                id BIGSERIAL PRIMARY KEY,
-                {common_columns}
-            )
-        """
-    raise ValueError(
-        f"Unsupported database dialect for raw transaction bootstrap: {dialect_name}"
-    )
 
 
 def ensure_transaction_id_unique_index() -> None:
-    """Ensure the raw transaction table enforces unique transaction IDs."""
+    """Ensure the raw transaction table schema and transaction ID uniqueness."""
     dialect_name = engine.dialect.name
     with engine.begin() as conn:
         conn.execute(text(_raw_transactions_table_ddl(dialect_name)))
 
-        # SQLite does not automatically clean historical duplicates before a unique
-        # index is created. Remove duplicates first so the database can enforce
-        # uniqueness instead of failing at runtime on the first insert.
-        if dialect_name == "sqlite":
+        # Existing databases created by older versions may have the table but not
+        # the fields consumed by streaming.kafka_consumer. Migrate additively.
+        if dialect_name == "postgresql":
+            conn.execute(text(
+                "ALTER TABLE mpesa_transactions_raw "
+                "ADD COLUMN IF NOT EXISTS source VARCHAR(64)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE mpesa_transactions_raw "
+                "ADD COLUMN IF NOT EXISTS payload JSONB"
+            ))
+        else:
+            existing_columns = {
+                row[1] for row in conn.execute(text("PRAGMA table_info(mpesa_transactions_raw)"))
+            }
+            if "source" not in existing_columns:
+                conn.execute(text(
+                    "ALTER TABLE mpesa_transactions_raw ADD COLUMN source VARCHAR(64)"
+                ))
+            if "payload" not in existing_columns:
+                conn.execute(text(
+                    "ALTER TABLE mpesa_transactions_raw ADD COLUMN payload TEXT"
+                ))
+
+            # SQLite does not automatically clean historical duplicates before a
+            # unique index is created. Remove duplicates first.
             conn.execute(text("""
                 WITH ranked AS (
                     SELECT id,
