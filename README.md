@@ -24,8 +24,8 @@ It is designed to reflect the operational patterns expected in modern payment an
 
 - Accepts M-Pesa webhook payloads and validates C2B schemas
 - Applies callback-scoped replay checks to C2B validation and confirmation; broader callback-family coverage and delivery recovery remain in progress
-- Publishes events to Kafka for asynchronous, scalable processing
-- Tracks consumer retries, dead-letter handling, and processing state in the database
+- Persists callback events to a PostgreSQL outbox before acknowledging, then relays them to Kafka with retryable delivery
+- Persists all callback families for audit and writes poison Kafka messages to a PostgreSQL dead-letter table before committing offsets
 - Stores verified transaction and operational data for analytics and reconciliation
 - Exposes operational dashboards and quality checks for real-time platform monitoring
 
@@ -65,7 +65,7 @@ flowchart LR
 The repository implements or configures several production-inspired controls. These must be verified in the target environment before describing the system as production-ready; configuration alone is not evidence of a tested guarantee:
 
 - credentials are expected to be supplied through environment configuration; repository/history scanning is still required before production use
-- configurable custom HMAC and replay/idempotency controls exist, but callback sender authenticity and distributed failure behavior require deployment-specific verification
+- callbacks are deduplicated by stable outbox event keys and relayed at-least-once; custom HMAC is not proof of Safaricom origin, and provider trust still requires deployment-specific verification
 - database idempotency helpers and Kafka retry/DLQ components require concurrency and end-to-end tests before guarantees can be claimed
 - dashboards, alert rules, and operational documentation are present, but alert delivery and recovery procedures still need to be exercised
 
@@ -130,13 +130,15 @@ The sample payload is synthetic. A successful HTTP response does not by itself p
 
 ## Validation and release quality
 
-The project includes automated verification around the runtime contract and production gate logic. The baseline validation run is:
+The repository now includes unit/contract tests and a GitHub Actions job intended to start disposable PostgreSQL and Kafka services, run Alembic migrations, and verify the callback → outbox → Kafka → PostgreSQL and poison-message DLQ paths. A passing CI run is required before these checks can be claimed as verified.
 
 ```bash
-python3 -m pytest tests/unit/test_config_loading.py tests/unit/test_idempotency_store.py tests/e2e/smoke_tests.py -q
+python -m pytest -q tests/test_config_security.py tests/test_database_ddl.py tests/test_event_identity.py tests/test_callback_validation.py tests/test_outbox.py
+# With disposable PostgreSQL and Kafka running and migrations applied:
+RUN_INTEGRATION_TESTS=1 python -m pytest -q tests/integration/test_event_delivery.py
 ```
 
-This validates the environment configuration contract, database-backed idempotency store behavior, and end-to-end smoke coverage.
+The integration tests are evidence only when they actually pass in the target environment; they are not a substitute for staging, load, security, or disaster-recovery exercises.
 
 ---
 
