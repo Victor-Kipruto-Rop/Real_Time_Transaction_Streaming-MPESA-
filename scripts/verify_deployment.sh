@@ -12,3 +12,10 @@ if payload.get("status") != "ready" or payload.get("database") != "ok":
     raise SystemExit(f"service is not ready: {payload}")
 print(json.dumps(payload, indent=2, sort_keys=True))
 PY
+
+metrics="$(curl --fail --silent --show-error --max-time 5 "$BASE_URL/metrics")"
+if ! grep -q 'mpesa_outbox_events' <<< "$metrics"; then
+  echo "Prometheus outbox metrics were not found" >&2
+  exit 1
+fi
+echo "Prometheus outbox metrics endpoint is responding."
