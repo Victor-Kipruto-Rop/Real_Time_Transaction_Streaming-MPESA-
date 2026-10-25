@@ -114,7 +114,7 @@ def test_retry_records_backoff_and_keeps_event_durable(monkeypatch):
         assert row is not None
         assert row.status == "pending"
         assert row.lease_until is None
-        assert row.next_attempt_at > before
+        assert row.next_attempt_at.replace(tzinfo=timezone.utc) > before
         assert row.last_error == "synthetic broker unavailable"
         assert row.attempts == 3
     engine.dispose()
