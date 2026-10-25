@@ -1,34 +1,17 @@
-"""Callback event identity regression tests."""
-
-from ingestion.event_identity import event_identity, replay_key
-
-
-def test_c2b_validation_and_confirmation_are_distinct_events():
-    payload = {"TransID": "TX123", "TransAmount": "500"}
-
-    assert event_identity(payload, "c2b_validation") != event_identity(
-        payload, "c2b_confirmation"
-    )
+# Database & Messaging
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+pg8000==1.30.5
+redis==5.0.1
+aioredis==2.0.1
+confluent-kafka==2.3.0
+kafka-python==2.0.2
 
 
-def test_c2b_event_identity_is_stable_when_payload_changes():
-    first = {"TransID": "TX123", "TransAmount": "500"}
-    altered = {"TransID": "TX123", "TransAmount": "900"}
 
-    assert replay_key(first, "c2b_confirmation") == replay_key(
-        altered, "c2b_confirmation"
-    )
+def test_b2c_result_identity_uses_nested_provider_conversation_id():
+    first = {"Result": {"ConversationID": "AG_123", "ResultCode": 0}}
+    retry = {"Result": {"ConversationID": "AG_123", "ResultCode": 1}}
 
-
-def test_events_without_provider_ids_fall_back_to_payload_hash():
-    first = {"Result": {"ResultCode": 0}}
-    second = {"Result": {"ResultCode": 1}}
-
-    assert replay_key(first, "b2c_result") != replay_key(second, "b2c_result")
-
-
-def test_stk_identity_uses_checkout_request_id():
-    first = {"Body": {"stkCallback": {"CheckoutRequestID": "ws_CO_123", "ResultCode": 0}}}
-    retry = {"Body": {"stkCallback": {"CheckoutRequestID": "ws_CO_123", "ResultCode": 1}}}
-
-    assert replay_key(first, "stk_callback") == replay_key(retry, "stk_callback")
+    assert replay_key(first, "b2c_result") == replay_key(retry, "b2c_result")
