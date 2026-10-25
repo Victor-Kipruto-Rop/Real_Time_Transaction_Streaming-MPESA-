@@ -77,3 +77,11 @@ def test_stk_route_rejects_malformed_callback_without_enqueue(monkeypatch):
 
     assert response.status_code == 400
     assert calls == []
+
+
+
+def test_phone_masking_keeps_only_last_three_digits_for_logs():
+    from ingestion.webhook_receiver import _mask_phone
+
+    assert _mask_phone("254712345678") == "*********678"
+    assert _mask_phone(None) == "unknown"
