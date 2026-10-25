@@ -37,8 +37,8 @@ OUTBOX_STATUS_GAUGE = Gauge(
     ["status"],
 )
 OUTBOX_OLDEST_PENDING_GAUGE = Gauge(
-    "mpesa_outbox_oldest_pending_seconds",
-    "Age in seconds of the oldest pending outbox event",
+    "mpesa_webhook_outbox_oldest_pending_seconds",
+    "Age in seconds of the oldest pending outbox event observed by the receiver",
 )
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
