@@ -317,10 +317,15 @@ def create_app() -> Flask:
 
     def _require_ui_token() -> bool:
         # A missing server-side token must disable the UI, not make it public.
-        # Prefer the header; query-string tokens can leak into browser/history/proxy logs.
+        # Header auth is preferred. Query-string support remains for the browser demo
+        # page, which forwards its token in X-UI-Token on API requests; use only in
+        # local/sandbox environments because URLs can be retained in browser/proxy logs.
         if not ui_token:
             return False
-        provided = request.headers.get("X-UI-Token", "").strip()
+        provided = (
+            request.headers.get("X-UI-Token", "").strip()
+            or request.args.get("token", "").strip()
+        )
         return hmac.compare_digest(provided, ui_token)
 
     def _pg_connect():
