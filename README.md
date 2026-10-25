@@ -22,8 +22,8 @@ It is designed to reflect the operational patterns expected in modern payment an
 
 ## What the platform does
 
-- Accepts and validates M-Pesa webhook events from the Safaricom API
-- Rejects replayed or duplicate transactions before they reach business processing
+- Accepts M-Pesa webhook payloads and validates C2B schemas
+- Applies callback-scoped replay checks to C2B validation and confirmation; broader callback-family coverage and delivery recovery remain in progress
 - Publishes events to Kafka for asynchronous, scalable processing
 - Tracks consumer retries, dead-letter handling, and processing state in the database
 - Stores verified transaction and operational data for analytics and reconciliation
