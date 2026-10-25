@@ -35,16 +35,19 @@ It is designed to reflect the operational patterns expected in modern payment an
 
 ```mermaid
 flowchart LR
-    A[Safaricom Daraja API] --> B[Webhook Receiver]
-    B --> C[Payload Validation + Configured Trust Controls]
-    C --> D[Kafka Producer]
-    D --> E[Kafka Topic]
-    E --> F[Kafka Consumer]
-    F --> G[PostgreSQL + Idempotency Store]
-    G --> H[dbt Models]
-    H --> I[Grafana Dashboards]
-    F --> J[Monitoring + Alerts]
-    B --> J
+    A[Daraja callback] --> B[Webhook receiver]
+    B --> C[Schema + configured trust checks]
+    C --> D[(PostgreSQL event outbox)]
+    D --> E[Outbox relay + retry]
+    E --> F[Kafka topic]
+    F --> G[Kafka consumer]
+    G --> H[(Callback audit + DLQ)]
+    G --> I[(C2B confirmation ledger rows)]
+    I --> J[dbt models]
+    J --> K[Grafana dashboards]
+    B --> L[Readiness + Prometheus metrics]
+    E --> L
+    G --> L
 ```
 
 ---
@@ -52,10 +55,10 @@ flowchart LR
 ## Key implementation areas
 
 - Ingestion and validation: Flask-based webhook receiver with schema checks and configurable custom HMAC; custom HMAC is not proof of Safaricom origin (see `docs/security/WEBHOOK_TRUST_MODEL.md`)
-- Event streaming: Kafka producer/consumer pipeline with retry and DLQ logic
-- Persistence: PostgreSQL-backed transactional and idempotency state tracking
+- Event streaming: PostgreSQL transactional outbox, confirmed Kafka delivery callbacks, lease/backoff retries, consumer offset control and durable PostgreSQL dead-letter handling
+- Persistence: Alembic migrations, durable callback audit, idempotent outbox keys, confirmed C2B transaction rows and dead-letter records
 - Analytics and quality: dbt models, staging and marts, and data-quality checks
-- Observability: health monitoring, alert rules, and Grafana operational views
+- Observability: receiver readiness/Prometheus metrics, consumer lag/DLQ metrics, outbox backlog metrics, alert rules, and Grafana operational views
 - Release discipline: environment-config enforcement, production approvals, rollback docs, and health gates
 
 ---
