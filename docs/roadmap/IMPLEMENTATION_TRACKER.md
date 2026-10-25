@@ -9,7 +9,7 @@
 | 1 | Configuration, installation and startup reliability | In progress | PostgreSQL healthcheck quoting fixed; Compose requires explicit DB/Grafana passwords; local setup guide and container healthchecks added; CI Compose validation still unconfirmed |
 | 2 | Architecture and code quality | Not started | Canonical entry points, module boundaries, supported Python version and dependency contract |
 | 3 | Webhook security and input validation | In progress | Trust model documented; request body bounded; forwarded IP spoofing reduced; UI disabled without token; callback-family coverage and runtime tests remain |
-| 4 | Idempotency and data integrity | Not started | Durable uniqueness, concurrency tests, correct event/transaction identity semantics |
+| 4 | Idempotency and data integrity | In progress | Added callback-scoped event identities so C2B validation and confirmation do not collide; concurrent database tests and recoverable publication/outbox remain |
 | 5 | Kafka reliability and recovery | In progress | Consumer offset auto-commit disabled; manual commits occur after handled persistence/duplicates; durable DLQ for poison messages and live broker tests remain |
 | 6 | PostgreSQL persistence, migrations and recovery | In progress | Raw table DDL now supports PostgreSQL and SQLite and includes consumer-required columns; live migration, duplicate cleanup and restore tests remain |
 | 7 | Data quality, reconciliation and dbt analytics | Not started | Tested lineage and models; reconciliation source of truth documented |
