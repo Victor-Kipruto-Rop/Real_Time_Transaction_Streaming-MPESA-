@@ -13,7 +13,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
+from prometheus_client import Counter, Gauge, start_http_server
 from sqlalchemy.exc import IntegrityError
 
 from app.database.connection import SessionLocal
@@ -21,6 +22,9 @@ from app.database.models import OutboxEvent
 from ingestion.event_identity import replay_key
 
 logger = logging.getLogger(__name__)
+OUTBOX_PUBLISH_TOTAL = Counter("mpesa_outbox_publish_total", "Outbox relay publish outcomes", ["outcome"])
+OUTBOX_PENDING_GAUGE = Gauge("mpesa_outbox_pending_events", "Number of pending outbox events")
+OUTBOX_OLDEST_PENDING_GAUGE = Gauge("mpesa_outbox_oldest_pending_seconds", "Age in seconds of the oldest pending outbox event")
 
 
 def enqueue_callback(event_type: str, payload: Dict[str, Any], topic: Optional[str] = None) -> Tuple[str, bool]:
@@ -83,6 +87,20 @@ def enqueue_callback(event_type: str, payload: Dict[str, Any], topic: Optional[s
             if existing:
                 return key, False
             raise
+
+
+def refresh_outbox_metrics() -> None:
+    """Refresh backlog metrics from durable PostgreSQL state."""
+    with SessionLocal() as session:
+        pending = session.execute(select(func.count()).select_from(OutboxEvent).where(OutboxEvent.status == "pending")).scalar_one()
+        oldest = session.execute(select(func.min(OutboxEvent.created_at)).where(OutboxEvent.status == "pending")).scalar_one()
+    OUTBOX_PENDING_GAUGE.set(int(pending))
+    if oldest is None:
+        OUTBOX_OLDEST_PENDING_GAUGE.set(0)
+    else:
+        if oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        OUTBOX_OLDEST_PENDING_GAUGE.set(max(0.0, (datetime.now(timezone.utc) - oldest).total_seconds()))
 
 
 def _claim_one(lease_seconds: int = 60) -> Optional[Dict[str, Any]]:
@@ -156,8 +174,10 @@ def relay_once(producer: Any) -> bool:
         if not delivered:
             raise RuntimeError("Kafka producer did not confirm delivery")
         _mark_published(row["id"])
+        OUTBOX_PUBLISH_TOTAL.labels(outcome="success").inc()
         logger.info("Outbox event published", extra={"event_key": row["event_key"], "topic": row["topic"]})
     except Exception as exc:
+        OUTBOX_PUBLISH_TOTAL.labels(outcome="failure").inc()
         _mark_retry(row["id"], str(exc), row["attempts"])
         logger.exception("Outbox delivery failed; event retained for retry", extra={"event_key": row["event_key"]})
     return True
@@ -172,9 +192,19 @@ def run_forever() -> None:
         topic=os.getenv("KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions"),
     )
     idle_seconds = float(os.getenv("OUTBOX_IDLE_SECONDS", "1"))
+    metrics_port = int(os.getenv("OUTBOX_METRICS_PORT", "8081"))
+    start_http_server(metrics_port)
+    logger.info("Outbox relay metrics server listening on port %s", metrics_port)
     try:
         while True:
-            if not relay_once(producer):
+            try:
+                refresh_outbox_metrics()
+                worked = relay_once(producer)
+            except Exception:
+                logger.exception("Outbox relay loop failed; retrying after backoff")
+                time.sleep(max(idle_seconds, 2))
+                continue
+            if not worked:
                 time.sleep(idle_seconds)
     finally:
         close = getattr(producer, "close", None)
