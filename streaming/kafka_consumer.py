@@ -257,14 +257,10 @@ class MpesaKafkaConsumer:
                           )
                         VALUES
                           (%s, %s, %s, %s, %s, %s, %s::jsonb)
-                        ON CONFLICT (transaction_id) DO UPDATE SET
-                          phone_number = COALESCE(EXCLUDED.phone_number, mpesa_transactions_raw.phone_number),
-                          amount = COALESCE(EXCLUDED.amount, mpesa_transactions_raw.amount),
-                          account_reference = COALESCE(EXCLUDED.account_reference, mpesa_transactions_raw.account_reference),
-                          transaction_time = COALESCE(EXCLUDED.transaction_time, mpesa_transactions_raw.transaction_time),
-                          source = EXCLUDED.source,
-                          payload = EXCLUDED.payload,
-                          processed_at = CURRENT_TIMESTAMP
+                        -- A transaction receipt identifies an immutable financial event.
+                        -- Preserve the first persisted financial values; later callbacks
+                        -- remain in mpesa_callback_events for audit and reconciliation.
+                        ON CONFLICT (transaction_id) DO NOTHING
                         """,
                         (
                             event.transaction_id,
