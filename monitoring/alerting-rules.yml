@@ -302,3 +302,17 @@ groups:
         annotations:
           summary: "Daraja API responding slowly"
           description: "95th percentile response time is {{ $value }}s"
+
+
+  - name: outbox_delivery_alerts
+    interval: 30s
+    rules:
+      - alert: OutboxDeliveryBacklog
+        expr: mpesa_outbox_oldest_pending_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+          component: outbox-relay
+        annotations:
+          summary: "Oldest outbox event is waiting too long"
+          description: "The oldest pending callback event is {{ $value }} seconds old; inspect relay health and Kafka delivery errors."
