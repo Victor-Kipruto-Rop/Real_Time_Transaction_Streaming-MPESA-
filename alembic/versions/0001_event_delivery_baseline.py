@@ -39,11 +39,13 @@ def upgrade():
                 payload JSONB,
                 processed_at TIMESTAMP,
                 raw_data TEXT,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
         bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN IF NOT EXISTS source VARCHAR(64)"))
         bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN IF NOT EXISTS payload JSONB"))
+        bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN IF NOT EXISTS received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
     elif dialect == "sqlite":
         bind.execute(text("""
             CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
@@ -63,6 +65,7 @@ def upgrade():
                 payload TEXT,
                 processed_at TIMESTAMP,
                 raw_data TEXT,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
@@ -71,6 +74,8 @@ def upgrade():
             bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN source VARCHAR(64)"))
         if "payload" not in columns:
             bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN payload TEXT"))
+        if "received_at" not in columns:
+            bind.execute(text("ALTER TABLE mpesa_transactions_raw ADD COLUMN received_at TIMESTAMP"))
     else:
         raise RuntimeError(f"Unsupported migration dialect: {dialect}")
 
