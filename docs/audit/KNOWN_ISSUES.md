@@ -17,6 +17,8 @@ This is a living engineering register. Severity reflects potential impact, not a
 | AUD-011 | High | Common trust/replay validation is applied to C2B routes but not consistently to B2C/STK callback routes | `ingestion/webhook_receiver.py` | Route-level tests and an explicit provider-compatible policy for every callback family | Open |
 | AUD-012 | Medium | In-process rate-limit state is not shared across workers/instances | `ingestion/webhook_receiver.py` | Distributed rate limiter or explicitly bounded edge proxy rate limits; multi-instance test | Open |
 | AUD-013 | Medium | UI token can be supplied in the query string for the browser demo and may leak through URL retention/logging | `ingestion/webhook_receiver.py`, `ingestion/static/webhook_sender.html` | Keep sandbox-only, redact query strings in logs, and prefer header-based access for production tooling | Open |
+| AUD-014 | High | Raw transaction table bootstrap previously used SQLite-only identity syntax for PostgreSQL and omitted columns required by the consumer | `app/database/connection.py`, `streaming/kafka_consumer.py` | Dialect-specific DDL and additive columns added; CI tests and live PostgreSQL migration/startup still required | Fix committed; runtime validation pending |
+| AUD-015 | High | Consumer previously auto-committed offsets before confirming durable writes; invalid events had no durable DLQ path | `streaming/kafka_consumer.py` | Manual offset commits now follow successful persistence/duplicate detection; poison-message recovery and DLQ path remain to be implemented and tested | Fix committed; runtime validation pending |
 
 ## Closure rules
 
