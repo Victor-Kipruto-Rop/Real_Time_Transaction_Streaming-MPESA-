@@ -56,8 +56,10 @@ def _canonical_payload(payload: Dict[str, Any]) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
 
 
-def _get_replay_key(payload: Dict[str, Any]) -> str:
-    return hashlib.sha256(_canonical_payload(payload).encode("utf-8")).hexdigest()
+def _get_replay_key(payload: Dict[str, Any], event_type: str) -> str:
+    from ingestion.event_identity import replay_key
+
+    return replay_key(payload, event_type)
 
 
 def _prune_replay_cache() -> None:
@@ -80,9 +82,9 @@ def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) ->
         raise ValueError("invalid webhook signature")
 
 
-def _check_replay(payload: Dict[str, Any]) -> None:
+def _check_replay(payload: Dict[str, Any], event_type: str) -> None:
     _prune_replay_cache()
-    key = _get_replay_key(payload)
+    key = _get_replay_key(payload, event_type)
     redis_client = _get_redis_replay_client()
     replay_key = f"webhook:replay:{key}"
 
@@ -92,12 +94,14 @@ def _check_replay(payload: Dict[str, Any]) -> None:
     elif key in _REPLAY_CACHE:
         raise ValueError("duplicate or replayed webhook payload")
 
-    transaction_id = str(payload.get("TransID") or payload.get("transaction_id") or "")
+    # Callback-event identity is scoped by event_type. Do not populate the
+    # transaction_id uniqueness field here: validation and confirmation can
+    # legitimately reference the same transaction identifier.
     if mark_event_seen(
         event_key=key,
-        transaction_id=transaction_id,
+        transaction_id=None,
         payload=payload,
-        source="webhook",
+        source=f"webhook:{event_type}",
     ):
         raise ValueError("duplicate or replayed webhook payload")
 
@@ -513,7 +517,7 @@ def create_app() -> Flask:
                     or request.headers.get("X-Mpesa-Signature")
                 )
                 _verify_webhook_signature(payload, signature)
-                _check_replay(payload)
+                _check_replay(payload, "c2b_validation")
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
@@ -593,7 +597,7 @@ def create_app() -> Flask:
                     or request.headers.get("X-Mpesa-Signature")
                 )
                 _verify_webhook_signature(payload, signature)
-                _check_replay(payload)
+                _check_replay(payload, "c2b_confirmation")
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
