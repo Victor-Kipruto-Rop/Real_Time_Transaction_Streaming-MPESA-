@@ -144,6 +144,7 @@ class MpesaEvent(BaseModel):
     """
 
     event_type: EventType
+    event_key: Optional[str] = None
     received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: str = "daraja_webhook"
     transaction_id: Optional[str] = None
