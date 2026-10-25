@@ -517,7 +517,6 @@ def create_app() -> Flask:
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
-                get_metrics_collector().record_webhook_security_event(reason)
                 message = reason.lower()
                 auth_headers = any(
                     request.headers.get(header)
@@ -598,7 +597,6 @@ def create_app() -> Flask:
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
-                get_metrics_collector().record_webhook_security_event(reason)
                 message = reason.lower()
                 auth_headers = any(
                     request.headers.get(header)
