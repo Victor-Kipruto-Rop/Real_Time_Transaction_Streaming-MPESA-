@@ -31,6 +31,10 @@ db_connection = None
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
 
 
+def _canonical_payload(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
+
+
 def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) -> None:
     secret = (settings.WEBHOOK_SIGNING_SECRET or "").strip()
     if not secret and settings.REQUIRE_WEBHOOK_SIGNATURE:
@@ -42,42 +46,6 @@ def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) ->
     expected = hmac.new(secret.encode("utf-8"), _canonical_payload(payload).encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
         raise ValueError("invalid webhook signature")
-
-
-def _check_replay(payload: Dict[str, Any], event_type: str) -> None:
-    _prune_replay_cache()
-    key = _get_replay_key(payload, event_type)
-    redis_client = _get_redis_replay_client()
-    replay_key = f"webhook:replay:{key}"
-
-    if redis_client:
-        if redis_client.exists(replay_key):
-            raise ValueError("duplicate or replayed webhook payload")
-    elif key in _REPLAY_CACHE:
-        raise ValueError("duplicate or replayed webhook payload")
-
-    # Callback-event identity is scoped by event_type. Do not populate the
-    # transaction_id uniqueness field here: validation and confirmation can
-    # legitimately reference the same transaction identifier.
-    if mark_event_seen(
-        event_key=key,
-        transaction_id=None,
-        payload=payload,
-        source=f"webhook:{event_type}",
-    ):
-        raise ValueError("duplicate or replayed webhook payload")
-
-    if redis_client:
-        if not redis_client.set(replay_key, "1", ex=settings.REPLAY_TTL_SECONDS, nx=True):
-            raise ValueError("duplicate or replayed webhook payload")
-    else:
-        _REPLAY_CACHE[key] = time.monotonic()
-
-
-def _replay_backend_status() -> str:
-    if _get_redis_replay_client() is not None:
-        return "redis"
-    return "memory"
 
 
 def _verify_request_signature(payload: Dict[str, Any]) -> None:
