@@ -213,7 +213,7 @@ class MpesaKafkaConsumer:
                             event.phone_number,
                             event.amount,
                             event.account_reference,
-                            transaction_time,
+                            transaction_time.isoformat() if transaction_time else None,
                             event.source,
                             json.dumps(event.model_dump(mode="json")),
                         ),
