@@ -175,7 +175,7 @@ class MpesaKafkaConsumer:
                 )
                 logger.info("Database connection pool initialized")
             except Exception as e:
-                logger.error(f"Failed to initialize DB pool: {e}")
+                logger.error("Failed to initialize DB pool (%s)", type(e).__name__)
 
     @contextmanager
     def _get_db_connection(self) -> Iterator:
@@ -188,7 +188,7 @@ class MpesaKafkaConsumer:
         try:
             yield conn
         except Exception as e:
-            logger.error(f"Database error: {e}")
+            logger.error("Database operation failed (%s)", type(e).__name__)
             conn.rollback()
             raise
         finally:
@@ -274,17 +274,15 @@ class MpesaKafkaConsumer:
                     )
                     conn.commit()
                     if cur.rowcount and cur.rowcount > 0:
-                        logger.info("Inserted transaction: %s", event.transaction_id)
+                        logger.info("Inserted C2B confirmation transaction")
                         return True
-                    logger.info(
-                        "Skipped duplicate transaction: %s", event.transaction_id
-                    )
+                    logger.info("Skipped duplicate C2B confirmation transaction")
                     # A duplicate is already durably represented, so it is safe
                     # to commit this Kafka offset.
                     return True
         except Exception as e:
             CONSUMER_DB_FAILURES_TOTAL.inc()
-            logger.error("Failed to insert transaction: %s", e)
+            logger.error("Failed to persist Kafka event (%s)", type(e).__name__)
             return False
 
     def _persist_dead_letter(self, msg: Any, error: Exception) -> bool:
@@ -312,7 +310,7 @@ class MpesaKafkaConsumer:
                             key_text,
                             raw_text,
                             type(error).__name__,
-                            str(error)[:4000],
+                            "Message failed validation or processing; inspect restricted raw_value for details.",
                         ),
                     )
                 conn.commit()
@@ -320,7 +318,7 @@ class MpesaKafkaConsumer:
             return True
         except Exception:
             CONSUMER_DB_FAILURES_TOTAL.inc()
-            logger.exception("Failed to persist Kafka dead-letter record")
+            logger.error("Failed to persist Kafka dead-letter record (database_or_serialization_error)")
             return False
 
     def consume_messages(self, max_messages: Optional[int] = None) -> int:
@@ -363,16 +361,12 @@ class MpesaKafkaConsumer:
                     self.consumer.commit(message=msg, asynchronous=False)
                     CONSUMER_MESSAGES_TOTAL.labels(outcome="handled").inc()
                     count += 1
-                    logger.info(
-                        "Handled event: %s / %s",
-                        event.event_type,
-                        event.transaction_id,
-                    )
+                    logger.info("Handled Kafka event; event_type=%s", event.event_type)
                 except Exception as e:
                     # Poison messages are moved to a durable PostgreSQL DLQ first.
                     # Commit only after that write succeeds; if PostgreSQL is down,
                     # leave the Kafka offset uncommitted so the record can retry.
-                    logger.error("Invalid event; attempting durable DLQ: %s", e)
+                    logger.error("Invalid Kafka event (%s); attempting durable DLQ", type(e).__name__)
                     if not self._persist_dead_letter(msg, e):
                         logger.error("DLQ persistence failed; retaining Kafka offset")
                         break
@@ -393,14 +387,14 @@ class MpesaKafkaConsumer:
             self.consumer.close()
             logger.info("Consumer closed")
         except Exception as e:
-            logger.error(f"Error closing consumer: {e}")
+            logger.error("Error closing consumer (%s)", type(e).__name__)
 
         if self._db_pool:
             try:
                 self._db_pool.closeall()
                 logger.info("Database pool closed")
             except Exception as e:
-                logger.error(f"Error closing DB pool: {e}")
+                logger.error("Error closing DB pool (%s)", type(e).__name__)
 
     def get_lag(self) -> Dict[str, int]:
         """
@@ -425,7 +419,7 @@ class MpesaKafkaConsumer:
 
             return lag_dict
         except Exception as e:
-            logger.error(f"Failed to get consumer lag: {e}")
+            logger.error("Failed to get consumer lag (%s)", type(e).__name__)
             return {}
 
 
