@@ -4,7 +4,7 @@
 
 # M-Pesa Real-Time Transaction Streaming Pipeline
 
-A production-style real-time payments platform for ingesting, validating, processing, and monitoring M-Pesa transaction events with security, idempotency, and observability built in.
+A portfolio implementation of a real-time M-Pesa event pipeline, designed to demonstrate ingestion, event streaming, persistence, analytics, and operational monitoring. Security and delivery guarantees are being validated incrementally; this repository is not a claim of production readiness.
 
 ## Executive summary
 
@@ -51,7 +51,7 @@ flowchart LR
 
 ## Key implementation areas
 
-- Ingestion and validation: Flask-based webhook service with strict signature and replay checks
+- Ingestion and validation: Flask-based webhook receiver with schema checks and configurable custom HMAC; custom HMAC is not proof of Safaricom origin (see `docs/security/WEBHOOK_TRUST_MODEL.md`)
 - Event streaming: Kafka producer/consumer pipeline with retry and DLQ logic
 - Persistence: PostgreSQL-backed transactional and idempotency state tracking
 - Analytics and quality: dbt models, staging and marts, and data-quality checks
@@ -101,13 +101,13 @@ cd Real_Time_Transaction_Streaming-MPESA-
 make infra-up
 ```
 
-### 3. Check service health
+### 4. Check service health
 
 ```bash
 curl -s http://localhost:5000/health | python -m json.tool
 ```
 
-### 4. Send a sample transaction event
+### 5. Send a sample transaction event
 
 ```bash
 curl -s -X POST http://localhost:5000/webhook/c2b/confirmation \
