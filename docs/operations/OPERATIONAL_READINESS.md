@@ -10,6 +10,10 @@ This project is a portfolio implementation. These procedures are instructions to
 - Monitor outbox rows by status, age of the oldest pending row, relay retry count, consumer lag, dead-letter volume, PostgreSQL availability, and callback HTTP status/latency.
 - Alert when the oldest pending outbox event exceeds the agreed service objective, when dead-letter volume rises, or when the relay/consumer is unhealthy. Alert delivery must be tested in the target environment.
 
+## Shared rate limiting
+
+For multi-worker or multi-instance deployments, configure REDIS_URL to a shared Redis service. The Compose stack configures the receiver to use its Redis service by default. If REDIS_URL is explicitly configured and Redis is unavailable, the receiver fails closed for rate-limited callback routes rather than silently downgrading to per-process limits. The in-process fallback is for local development only. Do not trust X-Forwarded-For unless trusted-proxy handling is correctly configured at the deployment boundary.
+
 ## Load testing
 
 Use only synthetic payloads and a disposable environment.
@@ -62,3 +66,21 @@ Then verify that the outbox relay is running, submit one uniquely identified syn
 ## Release gate
 
 A deployment is not considered verified until the readiness check, callback-to-Kafka-to-PostgreSQL test, DLQ test, backup/restore exercise, and a bounded load test all pass with recorded evidence. No production credentials or customer payloads belong in test artifacts.
+
+
+## Release verification gate
+
+Before proposing a release, complete this checklist with evidence tied to the exact commit SHA:
+
+- [ ] Current-head quality-gates and security-scan workflows pass; review all scanner reports and CI artifacts.
+- [ ] Fresh database migration and repeat migration pass; a sanitized supported legacy schema is tested separately.
+- [ ] Duplicate transaction IDs cause an explicit migration failure without deleting records.
+- [ ] Failure injection covers broker outage, relay retry and expired lease recovery, consumer DB failure, and DLQ-before-offset-commit.
+- [ ] Multi-worker rate limiting is verified with shared Redis, including the configured-Redis-outage behavior.
+- [ ] Synthetic callback round trip verifies outbox, Kafka, callback audit, and C2B raw transaction persistence.
+- [ ] Backup checksum and restore pass against a separate empty disposable database; verify schema revision and critical row counts.
+- [ ] Load evidence records commit, environment, user count, duration, throughput, p50/p95/p99 latency, error rate, outbox age, and consumer lag.
+- [ ] Alert delivery is tested end-to-end; configuration files alone are not evidence of delivered alerts.
+- [ ] Staging deployment, provider trust settings, rollback path, and production-data/secret exclusion are reviewed.
+
+Record each item as passed, failed, or externally blocked. Do not mark production-ready until critical items have evidence. Provider-specific trust and staging/alert tests cannot be inferred from unit tests. Delivery remains at-least-once; downstream consumers must be idempotent.
