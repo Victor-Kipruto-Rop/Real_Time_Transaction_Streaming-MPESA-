@@ -86,3 +86,61 @@ def test_relay_marks_row_published_after_delivery_confirmation(monkeypatch):
     assert outbox.relay_once(Producer()) is True
     assert published == [8]
     assert retried == []
+
+
+
+def test_retry_records_backoff_and_keeps_event_durable(monkeypatch):
+    from datetime import datetime, timezone
+    from app.database.models import OutboxEvent
+
+    engine, sessions = _isolated_outbox(monkeypatch)
+    with sessions() as session:
+        row = OutboxEvent(
+            event_key="retry-key",
+            event_type="c2b_confirmation",
+            topic="retry-topic",
+            payload={"event_key": "retry-key"},
+            status="publishing",
+            attempts=3,
+        )
+        session.add(row)
+        session.commit()
+        row_id = row.id
+
+    before = datetime.now(timezone.utc)
+    outbox._mark_retry(row_id, "synthetic broker unavailable", attempts=3)
+    with sessions() as session:
+        row = session.get(OutboxEvent, row_id)
+        assert row is not None
+        assert row.status == "pending"
+        assert row.lease_until is None
+        assert row.next_attempt_at > before
+        assert row.last_error == "synthetic broker unavailable"
+        assert row.attempts == 3
+    engine.dispose()
+
+
+def test_retry_error_storage_is_bounded(monkeypatch):
+    from app.database.models import OutboxEvent
+
+    engine, sessions = _isolated_outbox(monkeypatch)
+    with sessions() as session:
+        row = OutboxEvent(
+            event_key="retry-bounded-key",
+            event_type="c2b_confirmation",
+            topic="retry-topic",
+            payload={"event_key": "retry-bounded-key"},
+            status="publishing",
+            attempts=1,
+        )
+        session.add(row)
+        session.commit()
+        row_id = row.id
+
+    outbox._mark_retry(row_id, "x" * 5000, attempts=1)
+    with sessions() as session:
+        row = session.get(OutboxEvent, row_id)
+        assert row is not None
+        assert len(row.last_error) == 4000
+        assert row.status == "pending"
+    engine.dispose()
