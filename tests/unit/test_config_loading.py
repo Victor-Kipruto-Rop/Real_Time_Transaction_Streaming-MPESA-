@@ -10,6 +10,14 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("USE_SQLITE_FOR_TESTS", "1")
 
 from app.config import Settings, settings
+
+# Application imports must not bootstrap the schema. Prepare the isolated test
+# database through the same versioned migration path used by deployments.
+from alembic import command
+from alembic.config import Config
+
+command.upgrade(Config("alembic.ini"), "head")
+
 from app.main import app
 
 
