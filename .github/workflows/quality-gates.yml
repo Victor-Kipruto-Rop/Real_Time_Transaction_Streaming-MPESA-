@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   static-and-compose:
-    name: Static syntax and Compose validation
+    name: Static checks and Compose validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,14 +28,23 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install focused configuration-test dependencies
-        run: python -m pip install "pydantic==2.5.0" "pydantic-settings==2.1.0" "python-dotenv==1.0.0" "pytest==8.3.5" "SQLAlchemy==2.0.23" "psycopg2-binary==2.9.9"
+      - name: Install application and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5"
 
       - name: Compile Python files
-        run: python -m compileall -q .
+        run: python -m compileall -q app ingestion schemas streaming tests alembic
 
-      - name: Run configuration security regression tests
-        run: python -m pytest -q tests/test_config_security.py tests/test_database_ddl.py tests/test_event_identity.py
+      - name: Run unit and contract tests
+        run: >-
+          python -m pytest -q
+          tests/test_config_security.py
+          tests/test_database_ddl.py
+          tests/test_event_identity.py
+          tests/test_callback_validation.py
+          tests/test_outbox.py
+          tests/integration
 
       - name: Prepare non-production validation environment
         run: |
@@ -43,3 +52,50 @@ jobs:
 
       - name: Validate Docker Compose configuration
         run: docker compose -f docker-compose.yml config --quiet
+
+  integration:
+    name: PostgreSQL and Kafka integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare disposable integration environment
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-postgres-password\nGRAFANA_ADMIN_PASSWORD=ci-only-grafana-password\n' > .env
+          echo "DATABASE_URL=postgresql://data_engineer:ci-only-postgres-password@localhost:5433/mpesa_analytics" >> "$GITHUB_ENV"
+          echo "POSTGRES_HOST=localhost" >> "$GITHUB_ENV"
+          echo "POSTGRES_PORT=5433" >> "$GITHUB_ENV"
+          echo "POSTGRES_DB=mpesa_analytics" >> "$GITHUB_ENV"
+          echo "POSTGRES_USER=data_engineer" >> "$GITHUB_ENV"
+          echo "POSTGRES_PASSWORD=ci-only-postgres-password" >> "$GITHUB_ENV"
+          echo "KAFKA_BROKERS=localhost:9092" >> "$GITHUB_ENV"
+          echo "RUN_INTEGRATION_TESTS=1" >> "$GITHUB_ENV"
+
+      - name: Start disposable PostgreSQL and Kafka
+        run: docker compose up -d --wait postgres kafka
+
+      - name: Install application and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5"
+
+      - name: Apply versioned database migrations
+        run: alembic upgrade head
+
+      - name: Run full callback-to-Kafka-to-PostgreSQL and DLQ tests
+        run: python -m pytest -q tests/integration/test_event_delivery.py
+
+      - name: Show service status on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color postgres kafka zookeeper
+
+      - name: Stop disposable services
+        if: always()
+        run: docker compose down -v
