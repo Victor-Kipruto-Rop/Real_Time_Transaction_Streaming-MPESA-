@@ -133,15 +133,16 @@ def _blocked_webhook_context(payload: Dict[str, Any], reason: str) -> None:
     # Do not trust X-Forwarded-For unless a correctly configured trusted-proxy
     # middleware is deployed. Direct clients can spoof this header.
     client_ip = request.remote_addr or "unknown"
-    # Never log callback transaction identifiers or payload values.
+    source_ip_hash = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:16]
+    # Never log callback transaction identifiers, raw IP addresses, or payload values.
     signature_present = bool(
         request.headers.get("X-Safaricom-Signature")
         or request.headers.get("X-Signature")
         or request.headers.get("X-Mpesa-Signature")
     )
     logger.warning(
-        "Blocked webhook: source_ip=%s reason=%s signature_present=%s endpoint=%s",
-        client_ip,
+        "Blocked webhook: source_ip_hash=%s reason=%s signature_present=%s endpoint=%s",
+        source_ip_hash,
         reason,
         signature_present,
         request.path,
