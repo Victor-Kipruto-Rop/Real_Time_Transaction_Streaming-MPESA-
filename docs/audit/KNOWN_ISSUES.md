@@ -14,6 +14,9 @@ This is a living engineering register. Severity reflects potential impact, not a
 | AUD-008 | Medium | Test suite execution has not yet been recorded as baseline evidence | CI/test results not yet verified | CI run URL and pass/fail summary, including known failures | Open |
 | AUD-009 | Medium | README production-readiness language may exceed verified runtime evidence | `README.md` | Align claims to measured/tested capabilities and document limitations | Open |
 | AUD-010 | Medium | Replay/idempotency semantics may conflate a duplicate event with later callback/status events for the same transaction | `app/database/idempotency.py` | Define event identity versus transaction identity and test legitimate lifecycle updates | Open |
+| AUD-011 | High | Common trust/replay validation is applied to C2B routes but not consistently to B2C/STK callback routes | `ingestion/webhook_receiver.py` | Route-level tests and an explicit provider-compatible policy for every callback family | Open |
+| AUD-012 | Medium | In-process rate-limit state is not shared across workers/instances | `ingestion/webhook_receiver.py` | Distributed rate limiter or explicitly bounded edge proxy rate limits; multi-instance test | Open |
+| AUD-013 | Medium | UI token can be supplied in the query string for the browser demo and may leak through URL retention/logging | `ingestion/webhook_receiver.py`, `ingestion/static/webhook_sender.html` | Keep sandbox-only, redact query strings in logs, and prefer header-based access for production tooling | Open |
 
 ## Closure rules
 
