@@ -276,9 +276,9 @@ class MpesaKafkaConsumer:
                     cur.execute(
                         """
                         INSERT INTO kafka_dead_letters
-                          (topic, partition, offset, message_key, raw_value, error_type, error_message, attempts, status)
+                          (topic, partition_id, message_offset, message_key, raw_value, error_type, error_message, attempts, status)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, 1, 'pending')
-                        ON CONFLICT (topic, partition, offset) DO NOTHING
+                        ON CONFLICT (topic, partition_id, message_offset) DO NOTHING
                         """,
                         (
                             msg.topic(),
