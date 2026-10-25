@@ -1,0 +1,35 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "hardening/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-and-compose:
+    name: Static syntax and Compose validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile Python files
+        run: python -m compileall -q .
+
+      - name: Validate Docker Compose configuration
+        run: docker compose -f docker-compose.yml config --quiet
