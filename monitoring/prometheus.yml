@@ -38,6 +38,13 @@ scrape_configs:
         regex: '([^:]+)(?::\d+)?'
         replacement: '${1}'
 
+  # Durable PostgreSQL outbox relay metrics
+  - job_name: 'outbox-relay'
+    static_configs:
+      - targets: ['outbox-relay:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
   # Kafka Consumer metrics
   - job_name: 'kafka-consumer'
     static_configs:
