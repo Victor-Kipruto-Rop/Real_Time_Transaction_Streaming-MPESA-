@@ -26,9 +26,32 @@ logger = logging.getLogger(__name__)
 def enqueue_callback(event_type: str, payload: Dict[str, Any], topic: Optional[str] = None) -> Tuple[str, bool]:
     """Persist a callback event once. Return its stable key and whether it was inserted."""
     key = replay_key(payload, event_type)
+    result = payload.get("Result") if isinstance(payload.get("Result"), dict) else {}
+    body = payload.get("Body") if isinstance(payload.get("Body"), dict) else {}
+    stk = body.get("stkCallback") if isinstance(body.get("stkCallback"), dict) else {}
+    amount = payload.get("TransAmount")
+    if amount is None and isinstance(stk.get("CallbackMetadata"), dict):
+        items = stk["CallbackMetadata"].get("Item", [])
+        if isinstance(items, list):
+            amount_item = next((item for item in items if isinstance(item, dict) and item.get("Name") == "Amount"), None)
+            amount = amount_item.get("Value") if amount_item else None
+    transaction_id = (
+        payload.get("TransID")
+        or result.get("TransactionID")
+        or result.get("ConversationID")
+        or stk.get("CheckoutRequestID")
+        or stk.get("MerchantRequestID")
+    )
     envelope = {
+        "event_key": key,
         "event_type": event_type,
         "received_at": datetime.now(timezone.utc).isoformat(),
+        "source": "daraja_webhook",
+        "transaction_id": str(transaction_id) if transaction_id else None,
+        "phone_number": payload.get("MSISDN"),
+        "amount": str(amount) if amount is not None else None,
+        "account_reference": payload.get("AccountReference") or payload.get("BillRefNumber"),
+        "transaction_time": payload.get("TransTime"),
         "data": payload,
     }
     target_topic = topic or os.getenv("KAFKA_TOPIC_TRANSACTIONS", "mpesa-transactions")
