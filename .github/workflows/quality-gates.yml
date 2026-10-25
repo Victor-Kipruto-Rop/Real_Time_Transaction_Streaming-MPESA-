@@ -35,6 +35,7 @@ jobs:
 
       - name: Compile Python files
         run: python -m compileall -q app ingestion schemas streaming tests alembic scripts
+          bash -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/verify_deployment.sh
 
       - name: Run unit and contract tests
         run: >-
