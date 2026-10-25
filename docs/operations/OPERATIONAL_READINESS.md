@@ -57,7 +57,7 @@ BASE_URL=http://localhost:5000 bash scripts/verify_deployment.sh
 RUN_SYNTHETIC_SMOKE=1 BASE_URL=http://localhost:5000 POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_DB=mpesa_analytics POSTGRES_USER=data_engineer PGPASSWORD='your-local-only-password' bash scripts/verify_deployment.sh
 ```
 
-Then verify that the outbox relay is running, submit one uniquely identified synthetic callback, confirm its outbox row reaches `published`, confirm the consumer writes the callback audit and (for C2B) raw transaction row, and test that a malformed Kafka message is persisted to the dead-letter table before its offset advances.
+Then verify that the outbox relay is running, submit one uniquely identified synthetic callback, confirm its outbox row reaches `published`, confirm the consumer writes the callback audit and (for C2B confirmation only) raw transaction row, and test that a malformed Kafka message is persisted to the dead-letter table before its offset advances.
 
 ## Release gate
 
