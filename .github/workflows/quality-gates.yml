@@ -28,31 +28,38 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Prepare diagnostic artifact directory
+        run: mkdir -p artifacts
+
       - name: Install application and test dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5"
+          python -m pip install --upgrade pip 2>&1 | tee artifacts/pip-upgrade.log
+          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5" 2>&1 | tee artifacts/pip-install.log
 
-      - name: Compile Python files
-        run: python -m compileall -q app ingestion schemas streaming tests alembic scripts
-          bash -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/verify_deployment.sh
+      - name: Compile Python files and check shell scripts
+        run: |
+          python -m compileall -q app ingestion schemas streaming tests alembic scripts 2>&1 | tee artifacts/compile.log
+          bash -n scripts/backup_postgres.sh scripts/restore_postgres.sh scripts/verify_deployment.sh 2>&1 | tee artifacts/shell-syntax.log
 
       - name: Run unit and contract tests
-        run: >-
-          python -m pytest -q
-          tests/test_config_security.py
-          tests/test_database_ddl.py
-          tests/test_event_identity.py
-          tests/test_callback_validation.py
-          tests/test_outbox.py
-          tests/integration
+        run: |
+          python -m pytest -q tests/test_config_security.py tests/test_database_ddl.py tests/test_event_identity.py tests/test_callback_validation.py tests/test_outbox.py tests/integration 2>&1 | tee artifacts/unit-tests.log
 
       - name: Prepare non-production validation environment
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-postgres-password\nGRAFANA_ADMIN_PASSWORD=ci-only-grafana-password\n' > .env
 
       - name: Validate Docker Compose configuration
-        run: docker compose -f docker-compose.yml config --quiet
+        run: docker compose -f docker-compose.yml config --quiet 2>&1 | tee artifacts/compose-config.log
+
+      - name: Upload static-check diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-diagnostics-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
 
   integration:
     name: PostgreSQL and Kafka integration
@@ -69,6 +76,7 @@ jobs:
 
       - name: Prepare disposable integration environment
         run: |
+          mkdir -p artifacts
           printf 'POSTGRES_PASSWORD=ci-only-postgres-password\nGRAFANA_ADMIN_PASSWORD=ci-only-grafana-password\n' > .env
           echo "DATABASE_URL=postgresql://data_engineer:ci-only-postgres-password@localhost:5433/mpesa_analytics" >> "$GITHUB_ENV"
           echo "POSTGRES_HOST=localhost" >> "$GITHUB_ENV"
@@ -80,20 +88,20 @@ jobs:
           echo "RUN_INTEGRATION_TESTS=1" >> "$GITHUB_ENV"
 
       - name: Start disposable PostgreSQL and Kafka
-        run: docker compose up -d --wait postgres kafka
+        run: docker compose up -d --wait postgres kafka 2>&1 | tee artifacts/compose-up.log
 
       - name: Install application and test dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5"
+          python -m pip install --upgrade pip 2>&1 | tee artifacts/pip-upgrade.log
+          python -m pip install -r requirements/base.txt -r requirements/data.txt "pytest==8.3.5" 2>&1 | tee artifacts/pip-install.log
 
       - name: Apply versioned database migrations
-        run: alembic upgrade head
+        run: alembic upgrade head 2>&1 | tee artifacts/alembic-upgrade.log
 
       - name: Run full callback-to-Kafka-to-PostgreSQL and DLQ tests
         run: |
           mkdir -p artifacts
-          python -m pytest -q tests/integration/test_event_delivery.py | tee artifacts/integration-tests.log
+          python -m pytest -q tests/integration/test_event_delivery.py 2>&1 | tee artifacts/integration-tests.log
 
       - name: Run bounded synthetic webhook load smoke test
         run: |
