@@ -125,7 +125,7 @@ class MpesaKafkaConsumer:
                 "bootstrap.servers": self.brokers,
                 "group.id": self.group_id,
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": True,
+                "enable.auto.commit": False,
                 "max.poll.interval.ms": 300000,
             }
         )
@@ -181,7 +181,8 @@ class MpesaKafkaConsumer:
             event: Validated MpesaEvent
 
         Returns:
-            True if successful, False otherwise
+            True if inserted or already present (safe to commit the Kafka offset);
+            False if persistence failed (the message must not be committed).
         """
         if not self._db_pool:
             logger.warning("Database pool not available, skipping insert")
@@ -224,9 +225,11 @@ class MpesaKafkaConsumer:
                     logger.info(
                         "Skipped duplicate transaction: %s", event.transaction_id
                     )
-                    return False
+                    # A duplicate is already durably represented, so it is safe
+                    # to commit this Kafka offset.
+                    return True
         except Exception as e:
-            logger.error(f"Failed to insert transaction: {e}")
+            logger.error("Failed to insert transaction: %s", e)
             return False
 
     def consume_messages(self, max_messages: Optional[int] = None) -> int:
@@ -258,14 +261,27 @@ class MpesaKafkaConsumer:
                     payload = _coerce_legacy_event(payload)
                     event = MpesaEvent.model_validate(payload)
 
-                    if self.insert_raw(event):
-                        count += 1
-                        logger.info(
-                            f"Processed event: {event.event_type} / {event.transaction_id}"
+                    if not self.insert_raw(event):
+                        # Do not advance the partition offset after a persistence
+                        # failure; a restart can safely retry this message.
+                        logger.error(
+                            "Stopping consumption without committing offset after persistence failure"
                         )
+                        break
+
+                    self.consumer.commit(message=msg, asynchronous=False)
+                    count += 1
+                    logger.info(
+                        "Handled event: %s / %s",
+                        event.event_type,
+                        event.transaction_id,
+                    )
                 except Exception as e:
-                    logger.warning(f"Dropping invalid event: {e}")
-                    continue
+                    # Do not silently auto-commit malformed messages. Until a
+                    # durable DLQ path is wired for this consumer, stop and retain
+                    # the offset so the failure can be investigated.
+                    logger.error("Invalid event; offset not committed: %s", e)
+                    break
 
         except KeyboardInterrupt:
             logger.info("Consumer interrupted by user")
