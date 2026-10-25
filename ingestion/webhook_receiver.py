@@ -48,6 +48,13 @@ def _canonical_payload(payload: Dict[str, Any]) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
 
 
+def _mask_phone(value: Any) -> str:
+    """Avoid writing full customer phone numbers to application logs."""
+    digits = "".join(character for character in str(value or "") if character.isdigit())
+    if not digits:
+        return "unknown"
+    return "*" * max(0, len(digits) - 3) + digits[-3:]
+
 def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) -> None:
     secret = (settings.WEBHOOK_SIGNING_SECRET or "").strip()
     if not secret and settings.REQUIRE_WEBHOOK_SIGNATURE:
@@ -162,7 +169,7 @@ class WebhookProcessor:
                 "C2B Validation - TxnID: %s, Amount: %s, Phone: %s",
                 transaction_id,
                 amount,
-                phone,
+                _mask_phone(phone),
             )
 
             if amount is None:
@@ -190,7 +197,7 @@ class WebhookProcessor:
                 "C2B Confirmation - TxnID: %s, Amount: %s, Phone: %s, Time: %s",
                 transaction_id,
                 amount,
-                phone,
+                _mask_phone(phone),
                 timestamp,
             )
 
