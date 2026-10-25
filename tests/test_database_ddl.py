@@ -8,6 +8,9 @@ def test_postgres_bootstrap_uses_postgres_identity_syntax():
 
     assert "BIGSERIAL PRIMARY KEY" in ddl
     assert "AUTOINCREMENT" not in ddl
+    assert "SOURCE VARCHAR(64)" in ddl
+    assert "PAYLOAD JSONB" in ddl
+    assert "TRANSACTION_TIME VARCHAR(32)" in ddl
 
 
 def test_sqlite_bootstrap_uses_sqlite_identity_syntax():
@@ -15,6 +18,9 @@ def test_sqlite_bootstrap_uses_sqlite_identity_syntax():
 
     assert "INTEGER PRIMARY KEY AUTOINCREMENT" in ddl
     assert "BIGSERIAL" not in ddl
+    assert "SOURCE VARCHAR(64)" in ddl
+    assert "PAYLOAD TEXT" in ddl
+    assert "TRANSACTION_TIME VARCHAR(32)" in ddl
 
 
 def test_unsupported_dialect_fails_explicitly():
