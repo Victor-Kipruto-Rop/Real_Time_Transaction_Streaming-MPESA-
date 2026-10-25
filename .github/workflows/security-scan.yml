@@ -2,11 +2,15 @@ name: Security Scan
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, "hardening/**" ]
   pull_request:
     branches: [ main, develop ]
   schedule:
     - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   security-scan:
@@ -36,14 +40,6 @@ jobs:
         run: |
           bandit -r app/ ingestion/ -f json -o bandit-report.json || true
 
-      - name: Upload security reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: |
-            safety-report.json
-            bandit-report.json
-
       - name: Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -51,6 +47,18 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.sha }}
+          path: |
+            safety-report.json
+            bandit-report.json
+            trivy-results.sarif
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload Trivy results to GitHub Security
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
