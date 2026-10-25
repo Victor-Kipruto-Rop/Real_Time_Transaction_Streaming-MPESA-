@@ -21,9 +21,13 @@ def event_identity(payload: Dict[str, Any], event_type: str) -> str:
         return f"{event_type}:transaction:{transaction_id}"
 
     if event_type == "b2c_result":
+        result = payload.get("Result") if isinstance(payload.get("Result"), dict) else {}
         result_id = str(
             payload.get("ConversationID")
             or payload.get("OriginatorConversationID")
+            or result.get("ConversationID")
+            or result.get("OriginatorConversationID")
+            or result.get("TransactionID")
             or ""
         ).strip()
         if result_id:
