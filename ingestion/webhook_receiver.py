@@ -442,7 +442,9 @@ def create_app() -> Flask:
                                 "phone_number": row[1],
                                 "amount": str(row[2]),
                                 "transaction_time": (
-                                    row[3].isoformat() if row[3] else None
+                                    row[3].isoformat()
+                                    if hasattr(row[3], "isoformat")
+                                    else str(row[3]) if row[3] is not None else None
                                 ),
                                 "source": row[4],
                                 "received_at": row[5].isoformat() if row[5] else None,
