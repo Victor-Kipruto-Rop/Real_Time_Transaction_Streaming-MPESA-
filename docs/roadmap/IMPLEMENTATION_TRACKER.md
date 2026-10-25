@@ -6,7 +6,7 @@
 | Phase | Scope | Status | Gate to close |
 |---|---|---|---|
 | 0 | Repository audit and baseline | In progress | Initial audit, inventory, issue register and baseline-status docs added; full tree/runtime verification pending |
-| 1 | Configuration, installation and startup reliability | In progress | PostgreSQL healthcheck quoting fixed; Compose now requires explicit DB/Grafana passwords; CI Compose validation added but not yet confirmed passing |
+| 1 | Configuration, installation and startup reliability | In progress | PostgreSQL healthcheck quoting fixed; Compose requires explicit DB/Grafana passwords; local setup guide and container healthchecks added; CI Compose validation still unconfirmed |
 | 2 | Architecture and code quality | Not started | Canonical entry points, module boundaries, supported Python version and dependency contract |
 | 3 | Webhook security and input validation | In progress | Trust model documented; request body bounded; forwarded IP spoofing reduced; UI disabled without token; callback-family coverage and runtime tests remain |
 | 4 | Idempotency and data integrity | Not started | Durable uniqueness, concurrency tests, correct event/transaction identity semantics |
