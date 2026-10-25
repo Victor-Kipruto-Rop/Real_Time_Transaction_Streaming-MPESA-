@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 import psycopg2
+from redis import Redis
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 from pythonjsonlogger import jsonlogger
 
@@ -132,16 +133,15 @@ def _blocked_webhook_context(payload: Dict[str, Any], reason: str) -> None:
     # Do not trust X-Forwarded-For unless a correctly configured trusted-proxy
     # middleware is deployed. Direct clients can spoof this header.
     client_ip = request.remote_addr or "unknown"
-    transaction_id = str(payload.get("TransID") or payload.get("transaction_id") or "")
+    # Never log callback transaction identifiers or payload values.
     signature_present = bool(
         request.headers.get("X-Safaricom-Signature")
         or request.headers.get("X-Signature")
         or request.headers.get("X-Mpesa-Signature")
     )
     logger.warning(
-        "Blocked webhook: source_ip=%s transaction_id=%s reason=%s signature_present=%s endpoint=%s",
+        "Blocked webhook: source_ip=%s reason=%s signature_present=%s endpoint=%s",
         client_ip,
-        transaction_id,
         reason,
         signature_present,
         request.path,
@@ -202,12 +202,8 @@ class WebhookProcessor:
             result_desc = payload.get("Result", {}).get("ResultDesc")
             conversation_id = payload.get("ConversationID")
 
-            logger.info(
-                "B2C Result - Code: %s, Desc: %s, ConvID: %s",
-                result_code,
-                result_desc,
-                conversation_id,
-            )
+            # Result descriptions and conversation IDs may contain provider/customer data.
+            logger.info("B2C result callback processed; result_code=%s", result_code)
 
         except Exception as e:
             logger.error("B2C result processing failed (%s)", type(e).__name__)
@@ -222,14 +218,7 @@ class WebhookProcessor:
             result_code = stk_callback.get("ResultCode")
             result_desc = stk_callback.get("ResultDesc")
 
-            logger.info(
-                "STK Callback - MerchantRequestID: %s, CheckoutRequestID: %s, "
-                "ResultCode: %s, ResultDesc: %s",
-                merchant_request_id,
-                checkout_request_id,
-                result_code,
-                result_desc,
-            )
+            logger.info("STK callback processed; result_code=%s", result_code)
 
         except Exception as e:
             logger.error("STK callback processing failed (%s)", type(e).__name__)
@@ -267,6 +256,11 @@ def create_app() -> Flask:
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9092").strip()
     ui_token = os.getenv("UI_TOKEN", "").strip()
     rate_limit_per_min = int(os.getenv("RATE_LIMIT_PER_MIN", "120") or "120")
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    rate_limit_redis = (
+        Redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1, decode_responses=True)
+        if redis_url else None
+    )
 
     class _NoopProducer:
         def publish_transaction(self, *args, **kwargs):
@@ -344,16 +338,31 @@ def create_app() -> Flask:
         # arbitrary client-supplied X-Forwarded-For values.
         client_ip = request.remote_addr or "unknown"
 
+        if rate_limit_redis is not None:
+            # A shared Redis counter enforces the limit across workers/instances.
+            # Hash the peer address so the Redis key does not store raw IP values.
+            peer_hash = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:24]
+            key = "mpesa:rate-limit:{}:{}".format(route_key, peer_hash)
+            try:
+                count = rate_limit_redis.incr(key)
+                if count == 1:
+                    rate_limit_redis.expire(key, 60)
+                return count > rate_limit_per_min
+            except Exception as exc:
+                # Do not silently downgrade to per-process enforcement if Redis
+                # was explicitly configured and is unavailable.
+                logger.error("Distributed rate limiter unavailable (%s)", type(exc).__name__)
+                return True
+
+        # Local development fallback only. Production deployments with multiple
+        # workers/instances must configure REDIS_URL.
         now = time.time()
         window_start, count = _RATE_STATE.get((client_ip, route_key), (now, 0))
-
         if now - window_start >= 60:
             _RATE_STATE[(client_ip, route_key)] = (now, 1)
             return False
-
         if count >= rate_limit_per_min:
             return True
-
         _RATE_STATE[(client_ip, route_key)] = (window_start, count + 1)
         return False
 
@@ -451,7 +460,7 @@ def create_app() -> Flask:
                     )
 
         except Exception as e:
-            logger.error("UI verify error: %s", str(e))
+            logger.error("UI verification failed (%s)", type(e).__name__)
             return jsonify({"error": "verify_failed"}), 500
 
     @app.route("/webhook/c2b/validation", methods=["GET"])
