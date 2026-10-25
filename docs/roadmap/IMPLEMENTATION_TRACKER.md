@@ -10,8 +10,8 @@
 | 2 | Architecture and code quality | Not started | Canonical entry points, module boundaries, supported Python version and dependency contract |
 | 3 | Webhook security and input validation | In progress | Trust model documented; request body bounded; forwarded IP spoofing reduced; UI disabled without token; callback-family coverage and runtime tests remain |
 | 4 | Idempotency and data integrity | Not started | Durable uniqueness, concurrency tests, correct event/transaction identity semantics |
-| 5 | Kafka reliability and recovery | Not started | Producer/consumer failure tests, retry/DLQ/replay and offset semantics verified |
-| 6 | PostgreSQL persistence, migrations and recovery | Not started | Migrations, constraints, indexes and backup/restore exercise |
+| 5 | Kafka reliability and recovery | In progress | Consumer offset auto-commit disabled; manual commits occur after handled persistence/duplicates; durable DLQ for poison messages and live broker tests remain |
+| 6 | PostgreSQL persistence, migrations and recovery | In progress | Raw table DDL now supports PostgreSQL and SQLite and includes consumer-required columns; live migration, duplicate cleanup and restore tests remain |
 | 7 | Data quality, reconciliation and dbt analytics | Not started | Tested lineage and models; reconciliation source of truth documented |
 | 8 | Automated testing and CI | In progress | Added syntax/Compose workflow and focused config regression tests; latest passing CI result is not yet available |
 | 9 | Observability and operational monitoring | Not started | Correlated logs, metrics, actionable alerts and tested runbooks |
