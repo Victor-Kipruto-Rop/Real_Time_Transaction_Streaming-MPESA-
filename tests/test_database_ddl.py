@@ -11,6 +11,7 @@ def test_postgres_bootstrap_uses_postgres_identity_syntax():
     assert "SOURCE VARCHAR(64)" in ddl
     assert "PAYLOAD JSONB" in ddl
     assert "TRANSACTION_TIME VARCHAR(32)" in ddl
+    assert "RECEIVED_AT TIMESTAMP" in ddl
 
 
 def test_sqlite_bootstrap_uses_sqlite_identity_syntax():
