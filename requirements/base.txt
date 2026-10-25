@@ -1,4 +1,5 @@
 # Core Web Frameworks
+Flask==3.0.3
 fastapi==0.115.14
 starlette==0.46.2
 uvicorn[standard]==0.24.0
