@@ -64,6 +64,7 @@ def _raw_transactions_table_ddl(dialect_name: str) -> str:
             payload {payload_type},
             processed_at TIMESTAMP,
             raw_data TEXT,
+            received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """
@@ -86,6 +87,10 @@ def ensure_transaction_id_unique_index() -> None:
                 "ALTER TABLE mpesa_transactions_raw "
                 "ADD COLUMN IF NOT EXISTS payload JSONB"
             ))
+            conn.execute(text(
+                "ALTER TABLE mpesa_transactions_raw "
+                "ADD COLUMN IF NOT EXISTS received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ))
         else:
             existing_columns = {
                 row[1] for row in conn.execute(text("PRAGMA table_info(mpesa_transactions_raw)"))
@@ -97,6 +102,10 @@ def ensure_transaction_id_unique_index() -> None:
             if "payload" not in existing_columns:
                 conn.execute(text(
                     "ALTER TABLE mpesa_transactions_raw ADD COLUMN payload TEXT"
+                ))
+            if "received_at" not in existing_columns:
+                conn.execute(text(
+                    "ALTER TABLE mpesa_transactions_raw ADD COLUMN received_at TIMESTAMP"
                 ))
 
             # SQLite does not automatically clean historical duplicates before a
