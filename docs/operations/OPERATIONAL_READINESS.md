@@ -6,7 +6,7 @@ This project is a portfolio implementation. These procedures are instructions to
 
 - `GET /health` reports process liveness.
 - `GET /ready` verifies PostgreSQL connectivity and that the migrated outbox table is queryable. A 503 means the receiver should not receive traffic.
-- `GET /metrics` exposes Prometheus metrics from the receiver process. Keep this endpoint on a trusted network or restrict it at the reverse proxy.
+- `GET /metrics` exposes Prometheus metrics from the receiver process, including the pending/publishing/published outbox counts refreshed by readiness checks. Keep this endpoint on a trusted network or restrict it at the reverse proxy.
 - Monitor outbox rows by status, age of the oldest pending row, relay retry count, consumer lag, dead-letter volume, PostgreSQL availability, and callback HTTP status/latency.
 - Alert when the oldest pending outbox event exceeds the agreed service objective, when dead-letter volume rises, or when the relay/consumer is unhealthy. Alert delivery must be tested in the target environment.
 
