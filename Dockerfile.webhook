@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir --default-timeout=1000 -r base.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r ml.txt
 
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
 COPY ingestion ./ingestion
 COPY schemas ./schemas
 
