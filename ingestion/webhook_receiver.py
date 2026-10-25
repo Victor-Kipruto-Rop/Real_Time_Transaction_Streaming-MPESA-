@@ -23,6 +23,7 @@ from app.database.connection import SessionLocal
 from app.database.models import OutboxEvent
 from app.database.outbox import enqueue_callback
 from sqlalchemy import func, select
+from prometheus_client import Gauge
 from ingestion.metrics import get_metrics_collector
 from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequest
 
@@ -30,6 +31,11 @@ from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequ
 logger = logging.getLogger(__name__)
 
 db_connection = None
+OUTBOX_STATUS_GAUGE = Gauge(
+    "mpesa_outbox_events",
+    "Outbox event count by delivery status",
+    ["status"],
+)
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
 
@@ -676,13 +682,18 @@ def create_app() -> Flask:
     def readiness_check():
         try:
             with SessionLocal() as session:
-                pending = session.execute(
-                    select(func.count()).select_from(OutboxEvent).where(OutboxEvent.status == "pending")
-                ).scalar_one()
+                status_rows = session.execute(
+                    select(OutboxEvent.status, func.count()).group_by(OutboxEvent.status)
+                ).all()
+            counts = {str(status): int(count) for status, count in status_rows}
+            for status in ("pending", "publishing", "published"):
+                OUTBOX_STATUS_GAUGE.labels(status=status).set(counts.get(status, 0))
             return jsonify({
                 "status": "ready",
                 "database": "ok",
-                "outbox_pending": int(pending),
+                "outbox_pending": counts.get("pending", 0),
+                "outbox_publishing": counts.get("publishing", 0),
+                "outbox_published": counts.get("published", 0),
                 "delivery_backend": "postgres_outbox",
             }), 200
         except Exception:
