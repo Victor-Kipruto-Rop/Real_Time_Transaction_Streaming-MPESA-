@@ -31,7 +31,12 @@ def test_callback_enqueue_is_durable_and_idempotent(monkeypatch):
     }
 
     first_key, first_created = outbox.enqueue_callback("c2b_confirmation", payload)
-    second_key, second_created = outbox.enqueue_callback("c2b_confirmation", payload)
+    # Same provider receipt with conflicting amount must not replace the durable
+    # first-seen event; the conflicting delivery requires investigation.
+    conflicting_payload = {**payload, "TransAmount": "999"}
+    second_key, second_created = outbox.enqueue_callback(
+        "c2b_confirmation", conflicting_payload
+    )
 
     assert first_key == second_key
     assert first_created is True
@@ -41,6 +46,7 @@ def test_callback_enqueue_is_durable_and_idempotent(monkeypatch):
         assert len(rows) == 1
         assert rows[0].status == "pending"
         assert rows[0].payload["transaction_id"] == "TX-OUTBOX-1"
+        assert rows[0].payload["amount"] == "500"
     engine.dispose()
 
 
