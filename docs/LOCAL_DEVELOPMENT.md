@@ -29,7 +29,15 @@ docker compose ps
 docker compose logs --tail=100 postgres webhook-receiver kafka
 ```
 
-The Compose file deliberately fails fast when the database or Grafana admin password is missing. Do not weaken this behavior by committing default passwords.
+The Compose file deliberately fails fast when the database or Grafana admin password is missing. Do not weaken this behavior by committing default passwords. Compose runs the versioned Alembic migration service before the webhook, relay, and consumer start.
+
+When running an application entry point directly rather than through Compose, apply the schema first:
+
+```bash
+alembic upgrade head
+```
+
+Application imports and consumer constructors must not create or mutate the schema. If a migration fails, stop and reconcile the database state; do not fall back to `init_db()` as an automatic repair mechanism.
 
 Check the receiver's health endpoint:
 
