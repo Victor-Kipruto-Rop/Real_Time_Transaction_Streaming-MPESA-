@@ -60,9 +60,9 @@ flowchart LR
 
 ---
 
-## Production readiness highlights
+## Reliability and security design
 
-The project has been hardened around the operational realities of a fintech event stream:
+The repository implements or configures several production-inspired controls. These must be verified in the target environment before describing the system as production-ready; configuration alone is not evidence of a tested guarantee:
 
 - env-safe configuration with no repo-stored plaintext secrets
 - webhook message signing validation and replay protection
@@ -98,7 +98,7 @@ cd Real_Time_Transaction_Streaming-MPESA-
 ### 2. Start the stack
 
 ```bash
-make docker-up
+make infra-up
 ```
 
 ### 3. Check service health
@@ -152,4 +152,4 @@ Email: kiprutovictor39@gmail.com
 
 ## Summary
 
-This repository is positioned as a real-time transaction streaming and analytics platform with a strong engineering baseline for secure fintech event processing, production monitoring, and controlled deployment maturity. It is suitable for internal demo use, platform evaluation, and further hardening toward a live production environment.
+This repository is a real-time transaction streaming and analytics project designed for reproducible evaluation and further hardening. Treat it as a production-style portfolio/demo system until the deployment-specific security controls, failure recovery, load tests, and end-to-end processing guarantees have been independently exercised. Do not use real customer or production payment data in the demo environment.
