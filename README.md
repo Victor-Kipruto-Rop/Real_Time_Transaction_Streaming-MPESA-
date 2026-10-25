@@ -36,7 +36,7 @@ It is designed to reflect the operational patterns expected in modern payment an
 ```mermaid
 flowchart LR
     A[Safaricom Daraja API] --> B[Webhook Receiver]
-    B --> C[Signature Validation + Replay Guard]
+    B --> C[Payload Validation + Configured Trust Controls]
     C --> D[Kafka Producer]
     D --> E[Kafka Topic]
     E --> F[Kafka Consumer]
@@ -64,12 +64,10 @@ flowchart LR
 
 The repository implements or configures several production-inspired controls. These must be verified in the target environment before describing the system as production-ready; configuration alone is not evidence of a tested guarantee:
 
-- env-safe configuration with no repo-stored plaintext secrets
-- webhook message signing validation and replay protection
-- database-backed deduplication instead of in-memory-only caching
-- consumer-side retry and DLQ handling for failed message processing
-- alert thresholds and health checks aligned to production service risk
-- runbook, rollback checklist, emergency response flow, and SLO documentation
+- credentials are expected to be supplied through environment configuration; repository/history scanning is still required before production use
+- configurable custom HMAC and replay/idempotency controls exist, but callback sender authenticity and distributed failure behavior require deployment-specific verification
+- database idempotency helpers and Kafka retry/DLQ components require concurrency and end-to-end tests before guarantees can be claimed
+- dashboards, alert rules, and operational documentation are present, but alert delivery and recovery procedures still need to be exercised
 
 ---
 
@@ -95,16 +93,27 @@ git clone https://github.com/Victor-Kipruto-Rop/Real_Time_Transaction_Streaming-
 cd Real_Time_Transaction_Streaming-MPESA-
 ```
 
-### 2. Start the stack
+### 2. Configure local secrets
+
+Copy the example environment file and set strong, unique local development values before starting the stack. Do not use production credentials in local development.
 
 ```bash
+cp .env.example .env
+# Edit .env and set at least POSTGRES_PASSWORD and GRAFANA_ADMIN_PASSWORD.
+# Set UI_TOKEN if you want to use the browser webhook demo.
+```
+
+### 3. Validate and start the stack
+
+```bash
+docker compose config --quiet
 make infra-up
 ```
 
 ### 4. Check service health
 
 ```bash
-curl -s http://localhost:5000/health | python -m json.tool
+curl --fail --silent --show-error http://localhost:5000/health | python -m json.tool
 ```
 
 ### 5. Send a sample transaction event
@@ -114,6 +123,8 @@ curl -s -X POST http://localhost:5000/webhook/c2b/confirmation \
   -H 'Content-Type: application/json' \
   -d '{"TransID":"TXN123","TransAmount":"500","MSISDN":"254712345678","AccountReference":"ACC001","TransTime":"20260514120000"}'
 ```
+
+The sample payload is synthetic. A successful HTTP response does not by itself prove that a transaction was persisted, processed by Kafka, or reconciled against an independent ledger.
 
 ---
 
