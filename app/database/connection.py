@@ -38,33 +38,53 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 
 
-def ensure_transaction_id_unique_index() -> None:
-    """Ensure the raw transaction table enforces unique transaction IDs."""
-    with engine.begin() as conn:
-        conn.execute(text("""
+def _raw_transactions_table_ddl(dialect_name: str) -> str:
+    """Return table DDL valid for the supported SQLite and PostgreSQL dialects."""
+    common_columns = """
+        transaction_id VARCHAR(128) NOT NULL,
+        phone_number VARCHAR(32),
+        amount NUMERIC(18,2),
+        business_shortcode VARCHAR(64),
+        transaction_time VARCHAR(32),
+        transaction_status VARCHAR(32),
+        payment_method VARCHAR(32),
+        reference VARCHAR(128),
+        account_reference VARCHAR(128),
+        merchant_id VARCHAR(128),
+        region VARCHAR(64),
+        processed_at TIMESTAMP,
+        raw_data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    """
+    if dialect_name == "sqlite":
+        return f"""
             CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                transaction_id VARCHAR(128) NOT NULL,
-                phone_number VARCHAR(32),
-                amount NUMERIC(18,2),
-                business_shortcode VARCHAR(64),
-                transaction_time VARCHAR(32),
-                transaction_status VARCHAR(32),
-                payment_method VARCHAR(32),
-                reference VARCHAR(128),
-                account_reference VARCHAR(128),
-                merchant_id VARCHAR(128),
-                region VARCHAR(64),
-                processed_at TIMESTAMP,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                {common_columns}
             )
-        """))
+        """
+    if dialect_name == "postgresql":
+        return f"""
+            CREATE TABLE IF NOT EXISTS mpesa_transactions_raw (
+                id BIGSERIAL PRIMARY KEY,
+                {common_columns}
+            )
+        """
+    raise ValueError(
+        f"Unsupported database dialect for raw transaction bootstrap: {dialect_name}"
+    )
+
+
+def ensure_transaction_id_unique_index() -> None:
+    """Ensure the raw transaction table enforces unique transaction IDs."""
+    dialect_name = engine.dialect.name
+    with engine.begin() as conn:
+        conn.execute(text(_raw_transactions_table_ddl(dialect_name)))
 
         # SQLite does not automatically clean historical duplicates before a unique
-        # index is created. Remove the duplicates first so the database enforces a
-        # real uniqueness guarantee instead of failing at runtime on the first insert.
-        if engine.dialect.name == "sqlite":
+        # index is created. Remove duplicates first so the database can enforce
+        # uniqueness instead of failing at runtime on the first insert.
+        if dialect_name == "sqlite":
             conn.execute(text("""
                 WITH ranked AS (
                     SELECT id,
@@ -80,7 +100,6 @@ def ensure_transaction_id_unique_index() -> None:
             CREATE UNIQUE INDEX IF NOT EXISTS uq_mpesa_transactions_raw_transaction_id
             ON mpesa_transactions_raw (transaction_id)
         """))
-
 
 def init_db() -> None:
     """Create all tables required by the app and idempotency layer."""
