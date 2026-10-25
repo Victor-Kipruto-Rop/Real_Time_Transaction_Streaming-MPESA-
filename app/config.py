@@ -134,16 +134,19 @@ class Settings(BaseSettings):
     @field_validator("REQUIRE_WEBHOOK_SIGNATURE", mode="before")
     @classmethod
     def _validate_require_webhook_signature(cls, value, info: ValidationInfo):
-        secret = str(
-            info.data.get("WEBHOOK_SIGNING_SECRET")
-            or os.getenv("WEBHOOK_SIGNING_SECRET", "")
-            or ""
-        ).strip()
-        if not secret or secret.lower() in {"set_me_via_env"} or any(pattern in secret.lower() for pattern in _INSECURE_SECRET_PATTERNS):
-            return False
+        # Preserve an explicit enforcement request even when the secret is absent.
+        # The request handler then fails closed with a configuration error instead
+        # of silently downgrading enforcement to disabled.
         if value is None:
             return False
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+        if isinstance(value, bool):
+            return value
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
+            return False
+        raise ValueError("REQUIRE_WEBHOOK_SIGNATURE must be a boolean value")
 
     # Database
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
