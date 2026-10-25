@@ -23,12 +23,10 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
-from app.database.connection import init_db
 from app.database.idempotency import mark_event_seen, mark_transaction_processed
 from schemas.transaction_schema import normalize_ke_phone
 
-init_db()
-
+# Database schema is managed by Alembic before the application starts.
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
 _STATE_LOCK = threading.RLock()
