@@ -53,7 +53,7 @@ def _raw_transactions_table_ddl(dialect_name: str) -> str:
             phone_number VARCHAR(32),
             amount NUMERIC(18,2),
             business_shortcode VARCHAR(64),
-            transaction_time TIMESTAMP,
+            transaction_time VARCHAR(32),
             transaction_status VARCHAR(32),
             payment_method VARCHAR(32),
             reference VARCHAR(128),
