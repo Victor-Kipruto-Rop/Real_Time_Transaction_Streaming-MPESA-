@@ -113,8 +113,8 @@ class KafkaDeadLetter(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     topic: Mapped[str] = mapped_column(String(128), nullable=False)
-    partition: Mapped[int] = mapped_column(Integer, nullable=False)
-    offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    partition_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    message_offset: Mapped[int] = mapped_column(Integer, nullable=False)
     message_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     raw_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -122,4 +122,4 @@ class KafkaDeadLetter(Base):
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    __table_args__ = (UniqueConstraint("topic", "partition", "offset", name="uq_kafka_dead_letter_offset"),)
+    __table_args__ = (UniqueConstraint("topic", "partition_id", "message_offset", name="uq_kafka_dead_letter_offset"),)
