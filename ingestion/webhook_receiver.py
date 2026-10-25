@@ -166,9 +166,7 @@ class WebhookProcessor:
             datetime.strptime(str(trans_time), "%Y%m%d%H%M%S")
 
             logger.info(
-                "C2B Validation - TxnID: %s, Amount: %s, Phone: %s",
-                transaction_id,
-                amount,
+                "C2B Validation callback received; phone=%s",
                 _mask_phone(phone),
             )
 
@@ -181,7 +179,7 @@ class WebhookProcessor:
             return {"ResultCode": 0, "ResultDesc": "Validation accepted"}
 
         except Exception as e:
-            logger.error("Validation error: %s", str(e))
+            logger.error("C2B validation failed (%s)", type(e).__name__)
             return {"ResultCode": 1, "ResultDesc": "Validation failed"}
 
     def process_c2b_confirmation(self, payload: Dict[str, Any]) -> None:
@@ -194,15 +192,12 @@ class WebhookProcessor:
             timestamp = payload.get("TransTime")
 
             logger.info(
-                "C2B Confirmation - TxnID: %s, Amount: %s, Phone: %s, Time: %s",
-                transaction_id,
-                amount,
+                "C2B Confirmation callback received; phone=%s",
                 _mask_phone(phone),
-                timestamp,
             )
 
         except Exception as e:
-            logger.error("Confirmation error: %s", str(e))
+            logger.error("C2B confirmation validation failed (%s)", type(e).__name__)
 
     def process_b2c_result(self, payload: Dict[str, Any]) -> None:
         try:
@@ -218,7 +213,7 @@ class WebhookProcessor:
             )
 
         except Exception as e:
-            logger.error("B2C result error: %s", str(e))
+            logger.error("B2C result processing failed (%s)", type(e).__name__)
 
     def process_stk_callback(self, payload: Dict[str, Any]) -> None:
         try:
@@ -240,7 +235,7 @@ class WebhookProcessor:
             )
 
         except Exception as e:
-            logger.error("STK callback processing error: %s", str(e))
+            logger.error("STK callback processing failed (%s)", type(e).__name__)
 
     @staticmethod
     def _validate_payload(payload: Any) -> Dict[str, Any]:
