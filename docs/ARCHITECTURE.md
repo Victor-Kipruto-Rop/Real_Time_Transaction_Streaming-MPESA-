@@ -47,7 +47,7 @@ The optional HMAC is an application-specific shared-secret mechanism for senders
 ## Consumer persistence and dead letters
 
 - Every successfully handled callback is recorded in `mpesa_callback_events` for audit.
-- Only a `c2b_confirmation` event is allowed to upsert `mpesa_transactions_raw`; C2B validation is a pre-transaction decision and is not evidence that payment was received.
+- Only a `c2b_confirmation` event may insert into `mpesa_transactions_raw`; C2B validation is a pre-transaction decision and is not evidence that payment was received. A duplicate receipt ID never overwrites the first persisted financial values. Conflicting callbacks remain in the audit trail and must be investigated.
 - If a message is malformed or cannot be validated, the consumer writes its topic, partition, offset, raw value, and error details to `kafka_dead_letters`.
 - The consumer commits a poison-message offset only after the DLQ insert commits. If PostgreSQL is unavailable, it leaves the offset uncommitted so the message can be retried.
 - A durable DLQ table exists; replay tooling, operator disposition, and retention policy still require implementation and operational validation.
@@ -56,7 +56,7 @@ The optional HMAC is an application-specific shared-secret mechanism for senders
 
 - `alembic upgrade head` is the versioned schema entry point.
 - Docker Compose runs a one-shot `migrate` service before the webhook receiver, relay, and consumer.
-- The baseline/bridge migration creates missing ORM tables and the raw transaction table. It does not delete duplicate transaction records; it will fail if a unique transaction index cannot be established on existing data.
+- The baseline/bridge migration creates missing ORM tables and the raw transaction table. It does not delete duplicate transaction records; it fails if a unique transaction index cannot be established on existing data. The legacy SQLite bootstrap helper also refuses to delete duplicates.
 - Test fresh-database upgrade, repeated upgrade, and upgrade against a sanitized snapshot of an existing database before using this migration path for a real deployment.
 - Do not run destructive downgrades. Restore from a verified backup or use a reviewed forward migration.
 
