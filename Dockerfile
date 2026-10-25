@@ -33,7 +33,7 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health')" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8080/health', timeout=3).raise_for_status()" || exit 1
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "120", "ingestion.webhook_receiver:app"]
 
