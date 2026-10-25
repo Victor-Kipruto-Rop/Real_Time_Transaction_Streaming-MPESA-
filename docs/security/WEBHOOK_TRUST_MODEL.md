@@ -6,7 +6,7 @@ This document separates payload validation, replay/idempotency controls, and sen
 
 ## Current repository behavior
 
-The inspected receiver canonicalizes JSON and can validate an HMAC-SHA256 signature using `WEBHOOK_SIGNING_SECRET`. It also checks a replay key using Redis when available and otherwise uses process-local memory, while calling a database idempotency helper.
+The receiver validates callback-specific payload shapes and can validate a configured custom HMAC-SHA256 signature using `WEBHOOK_SIGNING_SECRET`. Accepted callback events are inserted into a PostgreSQL outbox under a stable, callback-scoped unique key. The outbox relay publishes pending events to Kafka and marks them published only after the Kafka delivery callback confirms success. Delivery is at-least-once: a crash after Kafka delivery but before the outbox status update can result in a repeat, so downstream consumers must remain idempotent.
 
 The repository configuration currently allows signature enforcement to be disabled. A custom HMAC is meaningful only when the sender is known to possess the shared secret and the signing format is agreed out of band.
 
@@ -34,6 +34,13 @@ If the provider callback mechanism does not provide a cryptographic signature, d
 - Record a correlation ID and security outcome without storing secrets in logs.
 - Require durable idempotency at the database boundary and define how legitimate later callback/status events are distinguished from duplicate delivery.
 - Fail health/readiness checks or explicitly signal degraded protection when a required security dependency is unavailable.
+
+## Callback family validation
+
+- C2B validation and confirmation use the C2B schema and callback-scoped event identities.
+- B2C result callbacks require a structured `Result`, numeric result code, description, and conversation identifier.
+- STK callbacks require `Body.stkCallback`, both request identifiers, numeric result code, description, and a well-formed optional metadata item list.
+- The custom HMAC is checked consistently on all callback routes when configured; it remains a shared-secret integration mechanism, not Safaricom-origin proof.
 
 ## Acceptance tests
 
