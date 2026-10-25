@@ -57,7 +57,7 @@ jobs:
         with:
           name: security-reports-${{ github.sha }}
           path: |
-            safety-report.json
+            pip-audit-report.json
             bandit-report.json
             trivy-results.sarif
           if-no-files-found: warn
