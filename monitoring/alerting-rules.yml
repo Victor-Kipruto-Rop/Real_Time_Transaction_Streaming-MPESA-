@@ -316,3 +316,37 @@ groups:
         annotations:
           summary: "Oldest outbox event is waiting too long"
           description: "The oldest pending callback event is {{ $value }} seconds old; inspect relay health and Kafka delivery errors."
+
+
+  - name: streaming_recovery_alerts
+    interval: 30s
+    rules:
+      - alert: KafkaDeadLettersCreated
+        expr: increase(mpesa_kafka_dead_letters_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: kafka-consumer
+        annotations:
+          summary: "Kafka poison messages were dead-lettered"
+          description: "Poison messages were persisted to the dead-letter table in the last five minutes."
+
+      - alert: ConsumerDatabaseWriteFailures
+        expr: increase(mpesa_consumer_database_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kafka-consumer
+        annotations:
+          summary: "Kafka consumer cannot persist messages"
+          description: "Database persistence failures were recorded by the consumer."
+
+      - alert: OutboxPublishFailures
+        expr: increase(mpesa_outbox_publish_total{outcome="failure"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: outbox-relay
+        annotations:
+          summary: "Outbox relay delivery failures detected"
+          description: "The relay failed to publish one or more durable outbox events in the last five minutes."
