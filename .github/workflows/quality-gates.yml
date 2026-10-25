@@ -37,5 +37,9 @@ jobs:
       - name: Run configuration security regression tests
         run: python -m pytest -q tests/test_config_security.py
 
+      - name: Prepare non-production validation environment
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-postgres-password\nGRAFANA_ADMIN_PASSWORD=ci-only-grafana-password\n' > .env
+
       - name: Validate Docker Compose configuration
         run: docker compose -f docker-compose.yml config --quiet
