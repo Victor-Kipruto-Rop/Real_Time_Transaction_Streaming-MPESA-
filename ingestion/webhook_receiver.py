@@ -15,58 +15,20 @@ from datetime import datetime
 from typing import Any, Dict, Tuple
 
 import psycopg2
-import redis
 from flask import Flask, jsonify, redirect, request, send_from_directory
 from pythonjsonlogger import jsonlogger
 
 from app.config import settings
-from app.database.connection import init_db
-from app.database.idempotency import mark_event_seen
+from app.database.outbox import enqueue_callback
 from ingestion.metrics import get_metrics_collector
 from schemas.transaction_schema import C2BConfirmationRequest, C2BValidationRequest
 
-init_db()
 
 logger = logging.getLogger(__name__)
 
 db_connection = None
 
 _RATE_STATE: Dict[Tuple[str, str], Tuple[float, int]] = {}
-_REPLAY_CACHE: Dict[str, float] = {}
-
-
-def _get_redis_replay_client():
-    try:
-        client = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6380")),
-            db=int(os.getenv("REDIS_DB", "0")),
-            password=os.getenv("REDIS_PASSWORD", ""),
-            decode_responses=True,
-            socket_connect_timeout=0.5,
-            socket_timeout=0.5,
-        )
-        client.ping()
-        return client
-    except Exception:
-        return None
-
-
-def _canonical_payload(payload: Dict[str, Any]) -> str:
-    return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
-
-
-def _get_replay_key(payload: Dict[str, Any], event_type: str) -> str:
-    from ingestion.event_identity import replay_key
-
-    return replay_key(payload, event_type)
-
-
-def _prune_replay_cache() -> None:
-    cutoff = time.monotonic() - settings.REPLAY_TTL_SECONDS
-    expired = [key for key, seen_at in _REPLAY_CACHE.items() if seen_at < cutoff]
-    for key in expired:
-        _REPLAY_CACHE.pop(key, None)
 
 
 def _verify_webhook_signature(payload: Dict[str, Any], signature: str | None) -> None:
@@ -116,6 +78,57 @@ def _replay_backend_status() -> str:
     if _get_redis_replay_client() is not None:
         return "redis"
     return "memory"
+
+
+def _verify_request_signature(payload: Dict[str, Any]) -> None:
+    signature = (
+        request.headers.get("X-Safaricom-Signature")
+        or request.headers.get("X-Signature")
+        or request.headers.get("X-Mpesa-Signature")
+    )
+    _verify_webhook_signature(payload, signature)
+
+
+def validate_b2c_payload(payload: Dict[str, Any]) -> bool:
+    """Validate the documented outer shape of a Daraja B2C result callback."""
+    result = payload.get("Result")
+    if not isinstance(result, dict):
+        return False
+    if not isinstance(result.get("ResultCode"), (int, str)) or isinstance(result.get("ResultCode"), bool):
+        return False
+    if not str(result.get("ResultCode", "")).strip().lstrip("-").isdigit():
+        return False
+    if not isinstance(result.get("ResultDesc"), str) or not result.get("ResultDesc").strip():
+        return False
+    if not (payload.get("ConversationID") or result.get("ConversationID") or result.get("OriginatorConversationID")):
+        return False
+    return True
+
+
+def validate_stk_payload(payload: Dict[str, Any]) -> bool:
+    """Validate the documented outer shape of a Daraja STK callback."""
+    body = payload.get("Body")
+    if not isinstance(body, dict):
+        return False
+    callback = body.get("stkCallback")
+    if not isinstance(callback, dict):
+        return False
+    if not isinstance(callback.get("MerchantRequestID"), str) or not callback["MerchantRequestID"].strip():
+        return False
+    if not isinstance(callback.get("CheckoutRequestID"), str) or not callback["CheckoutRequestID"].strip():
+        return False
+    result_code = callback.get("ResultCode")
+    if not isinstance(result_code, (int, str)) or isinstance(result_code, bool):
+        return False
+    if not str(result_code).strip().lstrip("-").isdigit():
+        return False
+    if not isinstance(callback.get("ResultDesc"), str) or not callback["ResultDesc"].strip():
+        return False
+    metadata = callback.get("CallbackMetadata")
+    if metadata is not None:
+        if not isinstance(metadata, dict) or not isinstance(metadata.get("Item", []), list):
+            return False
+    return True
 
 
 def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
@@ -511,43 +524,19 @@ def create_app() -> Flask:
                 return jsonify({"ResultCode": 1, "ResultDesc": "Invalid payload"}), 400
 
             try:
-                signature = (
-                    request.headers.get("X-Safaricom-Signature")
-                    or request.headers.get("X-Signature")
-                    or request.headers.get("X-Mpesa-Signature")
-                )
-                _verify_webhook_signature(payload, signature)
-                _check_replay(payload, "c2b_validation")
+                _verify_request_signature(payload)
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
-                message = reason.lower()
-                auth_headers = any(
-                    request.headers.get(header)
-                    for header in ("Authorization", "X-Safaricom-Signature", "X-Signature", "X-Mpesa-Signature")
-                )
-                status = 401 if auth_headers or "invalid" in message or "missing" in message else 409 if "duplicate" in message or "replay" in message else 401
-                return jsonify({"ResultCode": "1", "ResultDesc": reason}), status
+                return jsonify({"ResultCode": "1", "ResultDesc": reason}), 401
 
             logger.debug("Received C2B validation callback")
 
             response = processor.process_c2b_validation(payload)
 
-            producer = get_producer()
-
-            if response.get("ResultCode") == "0" and producer:
-                producer.publish_transaction(
-                    payload,
-                    key=payload.get("MSISDN"),
-                    event_type="c2b_validation",
-                )
-
-            if response.get("ResultCode") == 0 and producer:
-                producer.publish_transaction(
-                    payload,
-                    key=payload.get("MSISDN"),
-                    event_type="c2b_validation",
-                )
+            if str(response.get("ResultCode")) == "0":
+                event_key, created = enqueue_callback("c2b_validation", payload)
+                logger.info("C2B validation callback durably accepted", extra={"event_key": event_key, "outbox_created": created})
 
             return jsonify(response)
 
@@ -591,38 +580,20 @@ def create_app() -> Flask:
                 return response
 
             try:
-                signature = (
-                    request.headers.get("X-Safaricom-Signature")
-                    or request.headers.get("X-Signature")
-                    or request.headers.get("X-Mpesa-Signature")
-                )
-                _verify_webhook_signature(payload, signature)
-                _check_replay(payload, "c2b_confirmation")
+                _verify_request_signature(payload)
             except ValueError as exc:
                 reason = str(exc)
                 _blocked_webhook_context(payload, reason)
-                message = reason.lower()
-                auth_headers = any(
-                    request.headers.get(header)
-                    for header in ("Authorization", "X-Safaricom-Signature", "X-Signature", "X-Mpesa-Signature")
-                )
-                status = 401 if auth_headers or "invalid" in message or "missing" in message else 409 if "duplicate" in message or "replay" in message else 401
-                response = jsonify({"status": "error", "error": reason}), status
-                WebhookMetrics.record_request(status, time.time() - started)
+                response = jsonify({"status": "error", "error": reason}), 401
+                WebhookMetrics.record_request(401, time.time() - started)
                 return response
 
             logger.debug("Received C2B confirmation callback")
 
             processor.process_c2b_confirmation(payload)
 
-            producer = get_producer()
-
-            if producer:
-                producer.publish_transaction(
-                    payload,
-                    key=payload.get("MSISDN"),
-                    event_type="c2b_confirmation",
-                )
+            event_key, created = enqueue_callback("c2b_confirmation", payload)
+            logger.info("C2B confirmation callback durably accepted", extra={"event_key": event_key, "outbox_created": created})
 
             status = 200
             response = jsonify({"ResultCode": 0, "ResultDesc": "Accepted"}), status
@@ -664,22 +635,15 @@ def create_app() -> Flask:
                 )
 
             payload = processor._validate_payload(payload)
+            if not validate_b2c_payload(payload):
+                get_metrics_collector().record_validation_failure("b2c_result")
+                return jsonify({"status": "error", "error": "invalid_b2c_payload"}), 400
+            _verify_request_signature(payload)
 
             logger.debug("Received B2C result callback")
-
             processor.process_b2c_result(payload)
-
-            producer = get_producer()
-
-            if producer:
-                producer.publish_event(
-                    event={
-                        "event_type": "b2c_result",
-                        "received_at": datetime.now().isoformat(),
-                        "data": payload,
-                    }
-                )
-
+            event_key, created = enqueue_callback("b2c_result", payload)
+            logger.info("B2C callback durably accepted", extra={"event_key": event_key, "outbox_created": created})
             return jsonify({"status": "received"}), 200
 
         except Exception as e:
@@ -714,31 +678,16 @@ def create_app() -> Flask:
                 )
 
             payload = processor._validate_payload(payload)
+            if not validate_stk_payload(payload):
+                get_metrics_collector().record_validation_failure("stk_callback")
+                return jsonify({"ResultCode": 1, "ResultDesc": "Invalid STK callback payload"}), 400
+            _verify_request_signature(payload)
 
             logger.debug("Received STK Push callback")
-
             processor.process_stk_callback(payload)
-
-            producer = get_producer()
-
-            if producer:
-                producer.publish_event(
-                    event={
-                        "event_type": "stk_callback",
-                        "received_at": datetime.now().isoformat(),
-                        "data": payload,
-                    }
-                )
-
-            return (
-                jsonify(
-                    {
-                        "ResultCode": 0,
-                        "ResultDesc": "STK callback received",
-                    }
-                ),
-                200,
-            )
+            event_key, created = enqueue_callback("stk_callback", payload)
+            logger.info("STK callback durably accepted", extra={"event_key": event_key, "outbox_created": created})
+            return jsonify({"ResultCode": 0, "ResultDesc": "STK callback received"}), 200
 
         except Exception as e:
             logger.error("STK callback error: %s", str(e))
@@ -746,14 +695,14 @@ def create_app() -> Flask:
 
     @app.route("/health", methods=["GET"])
     def health_check():
-        replay_backend = _replay_backend_status()
+        delivery_backend = "postgres_outbox"
         return (
             jsonify(
                 {
                     "status": "healthy",
                     "timestamp": datetime.now().isoformat(),
                     "service": "mpesa-webhook-receiver",
-                    "replay_backend": replay_backend,
+                    "delivery_backend": delivery_backend,
                     "replay_ttl_seconds": settings.REPLAY_TTL_SECONDS,
                 }
             ),
