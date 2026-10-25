@@ -124,11 +124,9 @@ def validate_c2b_payload(payload: Dict[str, Any]) -> bool:
 
 
 def _blocked_webhook_context(payload: Dict[str, Any], reason: str) -> None:
-    client_ip = (
-        request.headers.get("X-Forwarded-For")
-        or request.remote_addr
-        or "unknown"
-    )
+    # Do not trust X-Forwarded-For unless a correctly configured trusted-proxy
+    # middleware is deployed. Direct clients can spoof this header.
+    client_ip = request.remote_addr or "unknown"
     transaction_id = str(payload.get("TransID") or payload.get("transaction_id") or "")
     signature_present = bool(
         request.headers.get("X-Safaricom-Signature")
@@ -263,6 +261,11 @@ def create_app() -> Flask:
     _configure_logging()
 
     app = Flask(__name__)
+    # Reject oversized callback bodies before parsing JSON. Keep this configurable
+    # for provider payload changes, but bounded by default.
+    app.config["MAX_CONTENT_LENGTH"] = max(
+        1024, int(os.getenv("MAX_WEBHOOK_BODY_BYTES", "65536"))
+    )
 
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9092").strip()
     ui_token = os.getenv("UI_TOKEN", "").strip()
@@ -313,15 +316,12 @@ def create_app() -> Flask:
     from ingestion.metrics import WebhookMetrics
 
     def _require_ui_token() -> bool:
+        # A missing server-side token must disable the UI, not make it public.
+        # Prefer the header; query-string tokens can leak into browser/history/proxy logs.
         if not ui_token:
-            return True
-
-        provided = (
-            request.headers.get("X-UI-Token", "").strip()
-            or request.args.get("token", "").strip()
-        )
-
-        return provided == ui_token
+            return False
+        provided = request.headers.get("X-UI-Token", "").strip()
+        return hmac.compare_digest(provided, ui_token)
 
     def _pg_connect():
         return psycopg2.connect(
@@ -337,10 +337,10 @@ def create_app() -> Flask:
         if rate_limit_per_min <= 0:
             return False
 
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        client_ip = (
-            (forwarded_for or request.remote_addr or "unknown").split(",")[0].strip()
-        )
+        # Use the direct peer address. If this app is behind a proxy, configure
+        # trusted proxy handling at the deployment boundary instead of trusting
+        # arbitrary client-supplied X-Forwarded-For values.
+        client_ip = request.remote_addr or "unknown"
 
         now = time.time()
         window_start, count = _RATE_STATE.get((client_ip, route_key), (now, 0))
@@ -354,6 +354,10 @@ def create_app() -> Flask:
 
         _RATE_STATE[(client_ip, route_key)] = (window_start, count + 1)
         return False
+
+    @app.errorhandler(413)
+    def request_too_large(_error):
+        return jsonify({"ResultCode": "1", "ResultDesc": "Payload too large"}), 413
 
     @app.route("/", methods=["GET"])
     def root():
