@@ -638,7 +638,11 @@ def create_app() -> Flask:
             if not validate_b2c_payload(payload):
                 get_metrics_collector().record_validation_failure("b2c_result")
                 return jsonify({"status": "error", "error": "invalid_b2c_payload"}), 400
-            _verify_request_signature(payload)
+            try:
+                _verify_request_signature(payload)
+            except ValueError as exc:
+                _blocked_webhook_context(payload, str(exc))
+                return jsonify({"status": "error", "error": "unauthorized"}), 401
 
             logger.debug("Received B2C result callback")
             processor.process_b2c_result(payload)
@@ -681,7 +685,11 @@ def create_app() -> Flask:
             if not validate_stk_payload(payload):
                 get_metrics_collector().record_validation_failure("stk_callback")
                 return jsonify({"ResultCode": 1, "ResultDesc": "Invalid STK callback payload"}), 400
-            _verify_request_signature(payload)
+            try:
+                _verify_request_signature(payload)
+            except ValueError as exc:
+                _blocked_webhook_context(payload, str(exc))
+                return jsonify({"ResultCode": 1, "ResultDesc": "Unauthorized"}), 401
 
             logger.debug("Received STK Push callback")
             processor.process_stk_callback(payload)
@@ -703,7 +711,7 @@ def create_app() -> Flask:
                     "timestamp": datetime.now().isoformat(),
                     "service": "mpesa-webhook-receiver",
                     "delivery_backend": delivery_backend,
-                    "replay_ttl_seconds": settings.REPLAY_TTL_SECONDS,
+                    "delivery_guarantee": "at_least_once_with_durable_outbox",
                 }
             ),
             200,
