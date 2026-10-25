@@ -14,10 +14,10 @@
 | 6 | PostgreSQL persistence, migrations and recovery | In progress | Raw table DDL now supports PostgreSQL and SQLite and includes consumer-required columns; Alembic baseline and Compose migration gate added; fresh/existing database migration and backup/restore evidence pending |
 | 7 | Data quality, reconciliation and dbt analytics | Not started | Tested lineage and models; reconciliation source of truth documented |
 | 8 | Automated testing and CI | In progress | Added unit/contract checks plus disposable PostgreSQL/Kafka integration job; latest run must pass before merge |
-| 9 | Observability and operational monitoring | Not started | Correlated logs, metrics, actionable alerts and tested runbooks |
-| 10 | Load testing and performance engineering | Not started | Reproducible workload/results with environment and limitations documented |
-| 11 | Deployment, security audit and disaster recovery | Not started | Staging validation, security/dependency review, rollback and restore evidence |
-| 12 | Portfolio documentation and release | Not started | Accurate README, diagrams, reproducible demo and honest limitations |
+| 9 | Observability and operational monitoring | In progress | Receiver Prometheus endpoint includes outbox status and oldest-pending age; alert rule added; alert delivery and end-to-end scrape still require verification |
+| 10 | Load testing and performance engineering | In progress | Synthetic Locust profile and a bounded CI load-smoke step added; performance results and capacity claims must wait for a passing run and artifact review |
+| 11 | Deployment, security audit and disaster recovery | In progress | Deployment readiness script, guarded backup/restore scripts and a disposable CI restore exercise added; staging, security findings and restore evidence remain pending |
+| 12 | Portfolio documentation and release | In progress | README, trust model and operational runbook updated; release remains blocked until CI and deployment evidence are reviewed |
 
 ## Execution order
 
@@ -41,4 +41,4 @@ Delivery is at-least-once, not exactly-once. A process crash after broker delive
 
 ## Current change boundary
 
-Work is being prepared on `hardening/portfolio-10-of-10` and the existing draft pull request. `main` is not being modified directly. The PostgreSQL Compose healthcheck quoting has been corrected in a commit; runtime validation is pending.
+Work is being prepared on `hardening/portfolio-10-of-10` and the existing draft pull request. `main` is not being modified directly. The PostgreSQL Compose healthcheck quoting has been corrected. A previous workflow run for an earlier head failed; its logs were not available through the connected GitHub interface. The newest head must pass CI before any runtime capability is marked verified.
