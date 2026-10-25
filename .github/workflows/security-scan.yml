@@ -16,6 +16,7 @@ jobs:
   security-scan:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -34,7 +35,7 @@ jobs:
       - name: Run dependency vulnerability audit
         id: dependency_audit
         continue-on-error: true
-        run: pip-audit -r requirements.txt --no-deps --format=json --output=pip-audit-report.json
+        run: pip-audit -r requirements.txt --format=json --output=pip-audit-report.json
 
       - name: Run Bandit security linter
         id: bandit
@@ -50,6 +51,8 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
 
       - name: Upload security reports
         if: always()
