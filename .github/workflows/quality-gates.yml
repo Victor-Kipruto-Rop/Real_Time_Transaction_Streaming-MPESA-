@@ -91,7 +91,53 @@ jobs:
         run: alembic upgrade head
 
       - name: Run full callback-to-Kafka-to-PostgreSQL and DLQ tests
-        run: python -m pytest -q tests/integration/test_event_delivery.py
+        run: |
+          mkdir -p artifacts
+          python -m pytest -q tests/integration/test_event_delivery.py | tee artifacts/integration-tests.log
+
+      - name: Run bounded synthetic webhook load smoke test
+        run: |
+          python -m pip install -r requirements/load.txt
+          mkdir -p artifacts
+          python -m app.database.outbox > artifacts/outbox-relay.log 2>&1 &
+          RELAY_PID=$!
+          gunicorn --bind 127.0.0.1:5000 --workers 1 ingestion.webhook_receiver:app > artifacts/webhook.log 2>&1 &
+          WEBHOOK_PID=$!
+          cleanup() {
+            kill "$WEBHOOK_PID" "$RELAY_PID" 2>/dev/null || true
+            wait "$WEBHOOK_PID" "$RELAY_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5000/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:5000/ready | tee artifacts/readiness.json
+          locust --headless --host=http://127.0.0.1:5000 -f tests/load/locustfile.py -u 2 -r 1 -t 10s --only-summary --exit-code-on-error 1 --csv=artifacts/locust | tee artifacts/locust-summary.log
+
+      - name: Exercise PostgreSQL backup and restore against a disposable database
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          mkdir -p artifacts/backups
+          BACKUP_DIR=artifacts/backups bash scripts/backup_postgres.sh | tee artifacts/backup.log
+          backup_file="$(find artifacts/backups -maxdepth 1 -name '*.dump' -print -quit)"
+          test -n "$backup_file"
+          PGPASSWORD="$POSTGRES_PASSWORD" createdb -h localhost -p 5433 -U "$POSTGRES_USER" mpesa_restore_test
+          RESTORE_TARGET_DATABASE_URL="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5433/mpesa_restore_test" CONFIRM_RESTORE=YES bash scripts/restore_postgres.sh "$backup_file" | tee artifacts/restore.log
+          revision="$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -p 5433 -U "$POSTGRES_USER" -d mpesa_restore_test -Atc 'SELECT version_num FROM alembic_version')"
+          test -n "$revision"
+          echo "Restored Alembic revision: $revision" | tee artifacts/restore-verification.log
+          PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -p 5433 -U "$POSTGRES_USER" -d mpesa_restore_test -c 'SELECT COUNT(*) AS callback_events FROM mpesa_callback_events; SELECT COUNT(*) AS outbox_events FROM event_outbox; SELECT COUNT(*) AS dead_letters FROM kafka_dead_letters;' | tee -a artifacts/restore-verification.log
+
+      - name: Upload reproducible CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-evidence-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Show service status on failure
         if: failure()
