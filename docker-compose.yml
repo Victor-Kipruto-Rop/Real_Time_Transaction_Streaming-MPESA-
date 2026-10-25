@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
     ports:
       - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
@@ -66,7 +66,7 @@ services:
       - "${GRAFANA_HOST_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env before starting services}
       GF_USERS_DEFAULT_THEME: dark
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/executive_command_center.json
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
@@ -76,7 +76,7 @@ services:
       GF_SERVER_SERVE_FROM_SUB_PATH: ${GRAFANA_SERVE_FROM_SUB_PATH:-false}
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,7 +124,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
       UI_TOKEN: ${UI_TOKEN:-}
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-}
       MAX_WEBHOOK_BODY_BYTES: ${MAX_WEBHOOK_BODY_BYTES:-65536}
@@ -154,7 +154,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
     depends_on:
       kafka:
         condition: service_healthy
@@ -174,7 +174,7 @@ services:
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-mpesa_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-data_engineer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting services}
     depends_on:
       postgres:
         condition: service_healthy
