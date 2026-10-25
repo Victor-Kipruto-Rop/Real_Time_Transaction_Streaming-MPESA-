@@ -418,13 +418,14 @@ class MpesaKafkaConsumer:
             partitions = self.consumer.assignment()
 
             for partition in partitions:
-                current_offset = self.consumer.position(partition)
+                positions = self.consumer.position([partition])
+                current_offset = positions[0].offset if positions else -1
                 high_water_mark = self.consumer.get_watermark_offsets(partition)[1]
-                lag = high_water_mark - current_offset if current_offset else 0
+                lag = max(0, high_water_mark - current_offset) if current_offset >= 0 else 0
                 lag_dict[partition.partition] = lag
                 CONSUMER_LAG_GAUGE.labels(
                     topic=self.topic, partition=str(partition.partition)
-                ).set(max(0, lag))
+                ).set(lag)
 
             return lag_dict
         except Exception as e:
