@@ -4,16 +4,18 @@ Python owns transaction-data processing, reconciliation computation, quality val
 
 ## The 10 planned services
 
-1. **transaction-ingestion** — consume durably accepted events/imports, normalize and deduplicate.
-2. **reconciliation-engine** — match normalized provider records to the authorized Java-owned ledger interface and classify discrepancies.
-3. **data-quality** — validate schemas and business rules; maintain findings and durable quarantine.
-4. **risk-scoring** — produce explainable risk signals using versioned features, rules and models.
-5. **stream-processing** — run continuous transformations, event-time windows and checkpointed stream jobs.
-6. **batch-processing** — run approved imports, historical backfills and resumable batch jobs.
-7. **analytics-metrics** — build tenant-scoped operational/business aggregates and curated datasets.
-8. **feature-engineering** — produce validated, versioned, point-in-time-correct features.
-9. **data-enrichment** — enrich records from explicitly approved reference sources with provenance.
-10. **model-evaluation-monitoring** — evaluate models and monitor drift, calibration and outcome quality.
+| # | Service | Priority |
+|---:|---|---|
+| 1 | `transaction-ingestion` | Critical |
+| 2 | `reconciliation-engine` | Critical |
+| 3 | `data-quality` | Critical |
+| 4 | `risk-scoring` | High |
+| 5 | `stream-processing` | High |
+| 6 | `batch-processing` | High |
+| 7 | `analytics-metrics` | High |
+| 8 | `feature-engineering` | High |
+| 9 | `data-enrichment` | Medium |
+| 10 | `model-evaluation-monitoring` | High |
 
 These are ten explicit service boundaries and design specifications; they are not all implemented yet. Stream, batch, analytics and model-evaluation workloads may initially run as jobs/workers rather than continuously running services. Their ownership stays explicit; independent deployment should be justified by throughput, SLOs, fault isolation and operational cost.
 
