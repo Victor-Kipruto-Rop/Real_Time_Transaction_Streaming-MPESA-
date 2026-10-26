@@ -1,0 +1,11 @@
+# Go outputs
+**/bin/
+**/dist/
+**/coverage.out
+**/coverage.html
+**/vendor/
+
+# Local secrets and environment
+.env
+.env.*
+!.env.example

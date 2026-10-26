@@ -1,0 +1,45 @@
+name: Go infrastructure services
+
+on:
+  pull_request:
+    paths:
+      - "Go/**"
+      - ".github/workflows/go-services-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Go/**"
+      - ".github/workflows/go-services-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - event-relay
+          - quota-engine
+          - infrastructure-monitor
+    env:
+      GOWORK: off
+    defaults:
+      run:
+        working-directory: Go/services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: false
+      - name: Format Go sources
+        run: gofmt -w $(find . -name '*.go' -type f)
+      - name: Download modules
+        run: go mod download
+      - name: Unit tests
+        run: go test -race -cover ./...
+      - name: Vet
+        run: go vet ./...
