@@ -41,4 +41,12 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClientTest do
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line(nil)
   end
 
+
+  test "parses the HTTP status line only after an actual CRLF delimiter" do
+    assert {:ok, 204} = PinnedHttpClient.parse_status_response("HTTP/1.1 204 No Content\\r\\n")
+    assert :more = PinnedHttpClient.parse_status_response("HTTP/1.1 204 No Content")
+    assert :more = PinnedHttpClient.parse_status_response("HTTP/1.1 204 No Content\\n")
+  end
+
+
 end
