@@ -1,4 +1,4 @@
-# PesaGuard Elixir / Phoenix Services
+# TELIXO Elixir / Phoenix Services
 
 Independent Elixir/OTP and Phoenix applications for concurrency-heavy, asynchronous and workflow-oriented PesaGuard workloads. Each service is a standalone Mix project under `services/` (not a single umbrella release), so it can be tested, built, configured and deployed independently.
 
@@ -79,3 +79,6 @@ The outbox relay requires an HTTPS endpoint and verifies TLS certificates before
 ## Release gate
 
 Before promotion, run `mix format --check-formatted`, `MIX_ENV=test mix compile --warnings-as-errors`, and `mix test` inside every service directory. Then run PostgreSQL-backed integration tests for duplicate idempotency keys, conflicting payloads, tenant isolation, concurrent transitions, outbox lease expiry, retry exhaustion, permanent HTTP failures, and relay crash recovery. The current unit suite does not replace these integration tests.
+
+
+Deployment passwords used in DATABASE_URL should be URL-safe (letters, digits, and hyphens are recommended) unless the connection string is percent-encoded correctly.

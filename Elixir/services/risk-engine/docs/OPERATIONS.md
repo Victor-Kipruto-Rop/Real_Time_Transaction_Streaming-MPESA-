@@ -1,16 +1,20 @@
-# Risk Engine — Operations and Recovery
+# Risk Engine — Operations and recovery
 
-This is a scaffold, not a declaration of production readiness.
+## Implemented baseline
+- Authenticated tenant-scoped API boundary; tenant identity is derived from verified bearer claims, not trusted from the request body.
+- PostgreSQL record persistence with idempotency uniqueness and guarded state transitions.
+- Transactional outbox writes, leased event claims, bounded retry scheduling, dead-letter status, and an HTTPS relay.
+- Service-specific deterministic request validation documented in the service Domain.Processor module.
 
-## Required before production
-- Implement a durable adapter with tenant-scoped queries, unique idempotency constraints and transactional state transitions.
-- Verify service identity and authorization at the trust boundary; never trust tenant IDs supplied by untrusted request bodies.
-- Add durable inbox/outbox, explicit acknowledgement boundaries, persisted retry schedules, dead-letter handling and authorized replay.
-- Bound payload size, concurrency, connection pools, retry counts, deadlines and retention.
-- Add dependency-backed readiness checks, SLO dashboards, alert rules, backup/restore evidence and incident runbooks.
-- Test duplicate delivery, crash after persistence, dependency outages, poison messages, cross-tenant access and replay authorization.
+## Service-specific production work still required
+Integrate validated signal sources, model/rule registry, calibration and drift monitoring, explainability records, timeout/fallback policy, and decision audit. Current average-score baseline is not a production credit/fraud model and never initiates payment actions.
 
-## Recovery
-Never acknowledge work before required durable state exists. Retry only transient failures with bounded backoff; quarantine permanent and security failures. Replay must preserve original event identity and create an audit record. Never log secrets or full sensitive payloads.
+## Reliability and security controls
+- Require TLS for external traffic and event-relay calls. Never log bearer tokens, signing secrets, raw credentials, or sensitive payloads.
+- Treat relay delivery as at-least-once; downstream consumers must deduplicate by event ID/Idempotency-Key.
+- Alert on database readiness failures, growing outbox backlog, retry exhaustion, expired leases, and dead-letter growth.
+- Replay only through an authenticated operator workflow with authorization, reason capture, and audit records.
+- Before release, test cross-tenant reads/writes, concurrent idempotency keys, conflicting payloads, crash/restart recovery, retry exhaustion, database failover, and backup restoration.
 
-TELIXO does not initiate, confirm, refund, reverse, settle or transfer funds.
+## Release status
+The shared foundation is implemented, but this service is not production-ready until the service-specific work above, integration tests, and security review are complete.
