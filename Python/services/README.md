@@ -1,11 +1,12 @@
-# Python services
+# Python deployable services
 
-| Service | Status | Responsibility | Next requirement |
-|---|---|---|---|
-| `risk-scoring` | Initial extraction | Stateless explainable transaction risk signal | CI tests, source golden-case parity, authenticated internal caller, tenant-scoped history |
-| `transaction-ingestion` | Planned | Normalize provider events after trusted callback intake | Map existing ingestion/validator modules and preserve idempotency/outbox |
-| `reconciliation` | Planned | Match imported ledger entries with provider transactions | Preserve matching semantics and golden datasets |
-| `data-quality` | Planned | Data quality rules, profiling and lineage | Inventory imports and agree data ownership |
-| `analytics-reporting` | Conditional | Aggregations and reports that have a clear consumer | Avoid duplicating frontend dashboards or Java reporting |
+TELIXO starts with four Python service boundaries:
 
-A directory name is not proof of a production-ready service. Each service must have independent dependency pins, container build, health endpoints, tests, ownership, versioned contracts, configuration documentation and CI.
+- `transaction-ingestion/`: durable consumption and normalization after trusted event acceptance.
+- `reconciliation-engine/`: deterministic matching against the canonical ledger interface.
+- `data-quality/`: validation, quality findings and quarantine.
+- `risk-scoring/`: existing inference service and the sole Python risk-scoring boundary.
+
+Analytics, batch processing, feature engineering and model evaluation remain jobs/libraries until independent scaling or operational ownership justifies another service. Do not add a microservice merely to mirror a folder.
+
+Each deployable service must eventually have a package, dependency policy, Dockerfile, health endpoints, configuration schema, tests, telemetry, migration ownership and service-specific CI. Target-boundary documentation is not proof that legacy code has been migrated or that a service is production-ready.
