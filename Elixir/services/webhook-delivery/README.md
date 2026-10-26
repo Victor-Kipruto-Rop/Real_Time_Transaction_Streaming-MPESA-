@@ -47,3 +47,19 @@ The customer delivery queue is separate from the internal transactional-outbox r
 Signing secrets are encrypted at rest with AES-256-GCM. Configure `WEBHOOK_ENCRYPTION_KEY` as base64-encoded 32-byte key material from a secret manager. Rotate this key only with a documented re-encryption plan. Restrict outbound network egress to prevent DNS rebinding or private-address SSRF; application URL checks alone are not a complete network boundary.
 
 These changes still require successful Elixir CI, PostgreSQL integration tests, concurrency/failure injection, and deployment-specific egress controls before production use.
+
+
+## Durable customer webhook delivery
+
+Authenticated endpoints:
+
+- `POST /v1/subscriptions`: create a tenant-owned HTTPS subscription with `target_url`, `event_types`, and a signing secret of at least 32 bytes. The secret is never returned.
+- `GET /v1/subscriptions`: list only the authenticated tenant's subscriptions.
+- `POST /v1/events`: enqueue an event containing `event_id`, `event_type`, integer `schema_version`, and object `payload`. The tenant is taken from the verified JWT. Fan-out is transactional and idempotent per subscription/event.
+- `GET /v1/deliveries/:id`: read tenant-scoped delivery status without exposing payloads or signing secrets.
+
+The customer queue is separate from the internal transactional-outbox relay. Its supervised dispatcher is opt-in via `WEBHOOK_DELIVERY_WORKER_ENABLED=true`; it uses PostgreSQL leases and row locks, signs exact request bytes, disables redirects, verifies TLS certificates, retries transient errors with bounded backoff, and dead-letters exhausted/permanent failures. Delivery is at-least-once, so consumers must durably deduplicate by `x-telixo-delivery-id`.
+
+Signing secrets are encrypted at rest using AES-256-GCM. Configure `WEBHOOK_ENCRYPTION_KEY` as base64-encoded 32-byte key material from a secret manager. Key rotation needs a documented re-encryption plan. Restrict outbound network egress to prevent DNS rebinding and private-address SSRF; URL checks alone are not a complete network boundary.
+
+Successful Elixir CI, PostgreSQL integration tests, fault injection, and deployment egress controls remain required before production use.
