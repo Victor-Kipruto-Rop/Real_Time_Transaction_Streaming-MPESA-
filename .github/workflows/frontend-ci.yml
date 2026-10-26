@@ -29,8 +29,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/${{ matrix.app }}/package-lock.json
       - name: Install dependencies
         working-directory: frontend/${{ matrix.app }}
         run: npm install
