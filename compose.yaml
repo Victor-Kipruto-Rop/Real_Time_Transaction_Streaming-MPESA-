@@ -1,8 +1,0 @@
-name: pesaguard-local
-include:
-  - path: Infrastructure/compose.yaml
-  - path: python-compose.yaml
-  - path: Java/compose.yaml
-  - path: Elixir/compose.yaml
-  - path: Go/compose.yaml
-  - path: frontend/compose.yaml
