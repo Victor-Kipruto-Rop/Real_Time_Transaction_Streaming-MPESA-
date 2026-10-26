@@ -31,3 +31,19 @@ already accepted. The `PesaGuard.WebhookDelivery.DeliveryRequest` module validat
 - Test restart recovery, duplicate events, poison messages, timeouts and downstream outages.
 
 The current endpoints are scaffold health checks, not proof of domain implementation or production readiness.
+
+
+## Durable customer webhook delivery
+
+The authenticated API now supports:
+
+- `POST /v1/subscriptions` — create a tenant-owned HTTPS subscription with `target_url`, a list of `event_types`, and a signing `secret` (minimum 32 bytes). The response never returns the secret.
+- `GET /v1/subscriptions` — list subscriptions for the authenticated tenant only.
+- `POST /v1/events` — enqueue an event with `event_id`, `event_type`, integer `schema_version`, and object `payload`. The tenant comes from the verified JWT; a supplied conflicting tenant is rejected. Enqueue is transactional across matching subscriptions and idempotent per subscription/event.
+- `GET /v1/deliveries/:id` — read tenant-scoped delivery metadata and status without exposing payloads or signing secrets.
+
+The customer delivery queue is separate from the internal transactional-outbox relay. The supervised dispatcher is opt-in via `WEBHOOK_DELIVERY_WORKER_ENABLED=true`, claims durable work using PostgreSQL row locks and leases, signs the exact request body, disables redirects, verifies TLS certificates, and retries transient failures with bounded backoff before dead-lettering. A deterministic delivery ID is sent to consumers for their own durable deduplication. Delivery is at-least-once; consumers must deduplicate by `x-telixo-delivery-id`.
+
+Signing secrets are encrypted at rest with AES-256-GCM. Configure `WEBHOOK_ENCRYPTION_KEY` as base64-encoded 32-byte key material from a secret manager. Rotate this key only with a documented re-encryption plan. Restrict outbound network egress to prevent DNS rebinding or private-address SSRF; application URL checks alone are not a complete network boundary.
+
+These changes still require successful Elixir CI, PostgreSQL integration tests, concurrency/failure injection, and deployment-specific egress controls before production use.
