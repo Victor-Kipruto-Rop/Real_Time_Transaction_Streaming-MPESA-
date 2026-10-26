@@ -139,6 +139,58 @@ if System.get_env("DATABASE_URL") do
                CustomerWebhookStore.list_attempts(tenant, subscription.subscription_id, retry_delivery.delivery_id)
     end
 
+    test "dead-letters retryable deliveries when the attempt budget is exhausted" do
+      tenant = "wh-exhaustion-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, subscription, :created} =
+               CustomerWebhookStore.create_subscription(
+                 tenant,
+                 "subscription-exhaustion",
+                 "https://hooks.example.test/events",
+                 ["reconciliation.completed"],
+                 String.duplicate("s", 32)
+               )
+
+      event_id = "exhaustion-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, delivery, :created} =
+               CustomerWebhookStore.enqueue(
+                 tenant,
+                 subscription.subscription_id,
+                 event_id,
+                 "reconciliation.completed",
+                 %{"case" => "retry-exhaustion"}
+               )
+
+      assert {:ok, claimed} = CustomerWebhookStore.claim(100)
+      assert Enum.any?(claimed, &(&1.delivery_id == delivery.delivery_id))
+
+      assert {:ok, %{rows: [[8]]}} =
+               Postgrex.query(
+                 PesaGuard.WebhookDelivery.Persistence.PostgresConnection,
+                 """
+                 UPDATE telixo_customer_webhook_deliveries
+                 SET attempts = 8
+                 WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'in_progress'
+                 RETURNING attempts
+                 """,
+                 [tenant, delivery.delivery_id]
+               )
+
+      assert :ok = CustomerWebhookStore.fail(tenant, delivery.delivery_id, "retry budget exhausted")
+      assert {:ok, %{rows: [["dead_lettered", 8]]}} =
+               Postgrex.query(
+                 PesaGuard.WebhookDelivery.Persistence.PostgresConnection,
+                 """
+                 SELECT status, attempts
+                 FROM telixo_customer_webhook_deliveries
+                 WHERE tenant_id = $1 AND delivery_id = $2
+                 """,
+                 [tenant, delivery.delivery_id]
+               )
+
+      assert {:ok, [%{attempt_number: 8, outcome: "dead_lettered"}]} =
+               CustomerWebhookStore.list_attempts(tenant, subscription.subscription_id, delivery.delivery_id)
+    end
+
     test "rejects weak secrets and event types outside the subscription allowlist" do
       tenant = "wh-test-" <> Base.encode16(:crypto.strong_rand_bytes(8))
       assert {:error, :invalid_secret} =
