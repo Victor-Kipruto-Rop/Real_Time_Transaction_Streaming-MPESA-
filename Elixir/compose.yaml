@@ -32,6 +32,7 @@ services:
       DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
       JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
       JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:?set WEBHOOK_SECRET_ENCRYPTION_KEY (base64 of 32 random bytes)}"
       EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
       EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:

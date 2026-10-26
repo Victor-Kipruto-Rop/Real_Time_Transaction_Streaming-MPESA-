@@ -18,3 +18,12 @@ Standalone Phoenix application with an OTP supervision tree, JSON health/readine
 - Test restart recovery, duplicate events, poison messages, timeouts and downstream outages.
 
 The current endpoints are scaffold health checks, not proof of domain implementation or production readiness.
+
+## Durable customer webhook delivery (implementation in progress)
+
+- Tenant-scoped subscriptions and delivery records are persisted in PostgreSQL with unique idempotency constraints.
+- Subscription secrets are encrypted with AES-256-GCM. Configure `WEBHOOK_SECRET_ENCRYPTION_KEY` as base64 for exactly 32 random bytes using a secret manager; do not commit it. Key rotation needs an explicit operational migration.
+- The authenticated API exposes `GET /v1/subscriptions`, `POST /v1/subscriptions`, `POST /v1/subscriptions/:subscription_id/deliveries`, `GET /v1/subscriptions/:subscription_id/deliveries`, and `POST /v1/events`. Supply an `Idempotency-Key` when creating a subscription. The event endpoint fans out to active subscriptions matching the event type; retry the same event ID after partial failures to complete missing per-subscription deliveries.
+- A supervised worker leases pending deliveries, signs the exact HTTP body, disables redirects, verifies TLS peers, applies DNS destination checks, and records delivery/retry/dead-letter state. Delivery is at least once; receivers must deduplicate `x-telixo-delivery-id`.
+- The authenticated `POST /v1/events` endpoint is the integration seam for the trusted internal event relay. Source services must call it only with authenticated tenant-scoped event contracts; source-event fan-out is not a substitute for the separate transactional outbox relay.
+- DNS preflight cannot eliminate DNS-rebinding races. Production network egress policy must block loopback, private, link-local, and metadata-service destinations. The delivery pipeline still requires CI and fault-injection verification before production use.
