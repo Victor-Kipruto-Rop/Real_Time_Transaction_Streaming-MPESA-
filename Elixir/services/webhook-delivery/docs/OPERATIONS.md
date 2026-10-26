@@ -18,3 +18,10 @@ Complete tenant webhook subscription CRUD, endpoint ownership verification, per-
 
 ## Release status
 The shared foundation is implemented, but this service is not production-ready until the service-specific work above, integration tests, and security review are complete.
+
+## Audited dead-letter replay
+- Operators can request replay through `POST /v1/outbox/:event_id/replay` with JSON `{"reason":"..."}`.
+- The bearer JWT must contain the exact `outbox:replay` scope (space-delimited `scope` or array `scopes` claim). Tenant identity comes only from the verified JWT; the request cannot select a tenant.
+- Reasons must be 10–500 characters. Replay is allowed only for a dead-lettered event belonging to the authenticated tenant and this service.
+- Requeue and audit insert commit in one PostgreSQL transaction. The event ID and payload remain unchanged for downstream idempotency; the retry counter is reset for the new operator-approved attempt. The audit row records service, tenant, event, actor subject, reason and timestamp.
+- This is a tenant-scoped operator primitive, not a general event replay API. Production identity issuance must restrict `outbox:replay` to authorized operators. Alert and review replay audit records as part of incident response.
