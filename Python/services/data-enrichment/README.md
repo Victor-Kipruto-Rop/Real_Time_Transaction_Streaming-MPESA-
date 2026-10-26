@@ -1,5 +1,9 @@
 # Data Enrichment Service
 
+**Priority:** Medium
+
+**Design responsibility:** Normalize and enrich records using approved reference data, provenance and explicit unknown states; never invent missing transaction facts.
+
 **Purpose:** Enrich approved records with authorized reference data such as merchant classifications and configured reference lists.
 
 ## Contract
