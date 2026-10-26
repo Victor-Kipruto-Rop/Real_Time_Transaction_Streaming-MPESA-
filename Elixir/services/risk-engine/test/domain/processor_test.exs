@@ -9,4 +9,9 @@ defmodule PesaGuard.RiskEngine.Domain.ProcessorTest do
     assert result["signal_names"] == ["device", "velocity"]
     refute Map.has_key?(result, "payment_action")
   end
+
+  test "rejects normalized signals outside zero and one" do
+    command = %{"signals" => %{"velocity" => 1.2}, "model_or_rule_version" => "v1"}
+    assert {:error, :signals_must_be_between_zero_and_one} = Processor.prepare(command)
+  end
 end

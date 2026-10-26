@@ -12,4 +12,13 @@ defmodule PesaGuard.FraudDetection.Domain.ProcessorTest do
     assert result["risk_score"] <= 1.0
     assert result["risk_band"] == "high"
   end
+
+  test "rejects features outside the supported numeric ranges" do
+    command = %{
+      "rule_version" => "rules-v1",
+      "features" => %{"amount_deviation" => 2.0, "velocity_count" => 5, "new_device" => false}
+    }
+
+    assert {:error, :invalid_features} = Processor.prepare(command)
+  end
 end
