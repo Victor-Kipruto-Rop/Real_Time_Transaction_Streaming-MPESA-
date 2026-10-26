@@ -295,14 +295,21 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
   defp record_attempt(tenant_id, delivery_id, sql, params, outcome, http_status, error_code) do
     case Postgrex.transaction(@connection, fn conn ->
            case Postgrex.query!(conn, sql, params).rows do
-             [[attempt_number, subscription_id, event_id, event_type | _rest]] ->
+             [[attempt_number, subscription_id, event_id, event_type | rest]] ->
+               actual_outcome =
+                 case {outcome, List.last(rest)} do
+                   {"retry_or_dead_letter", "dead_lettered"} -> "dead_lettered"
+                   {"retry_or_dead_letter", "pending"} -> "retry_scheduled"
+                   _ -> outcome
+                 end
+
                Postgrex.query!(conn, """
                INSERT INTO telixo_customer_webhook_attempts
                  (tenant_id, delivery_id, subscription_id, event_id, event_type,
                   attempt_number, outcome, http_status, error_code)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                """, [tenant_id, delivery_id, subscription_id, event_id, event_type,
-                     attempt_number, outcome, http_status, safe_error_code(error_code)])
+                     attempt_number, actual_outcome, http_status, safe_error_code(error_code)])
                :ok
 
              [] ->
@@ -317,7 +324,11 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
   end
 
   defp safe_error_code(nil), do: nil
-  defp safe_error_code(code) when is_binary(code), do: String.slice(code, 0, 160)
+  defp safe_error_code(code) when is_binary(code) do
+    code
+    |> String.replace(~r/[^a-zA-Z0-9_.:-]/, "_")
+    |> String.slice(0, 160)
+  end
   defp safe_error_code(_), do: "unknown_error"
 
   defp get_subscription(tenant_id, subscription_id) do
