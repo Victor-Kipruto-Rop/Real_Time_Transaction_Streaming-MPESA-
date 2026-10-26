@@ -9,12 +9,12 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   alias PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore
   alias PesaGuard.WebhookDelivery.Signing
   alias PesaGuard.WebhookDelivery.TargetPolicy
+  alias PesaGuard.WebhookDelivery.PinnedHttpClient
   alias PesaGuard.WebhookDelivery.EndpointCircuitBreaker
 
   @poll_interval_ms 1_000
   @batch_size 5
-  @timeout_ms 5_000
-
+  
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -70,48 +70,25 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       })
 
     result =
-      with :ok <- TargetPolicy.validate(delivery.target_url),
+      with {:ok, target} <- TargetPolicy.resolve_target(delivery.target_url),
            :ok <- EndpointCircuitBreaker.allow?(delivery.target_url),
            {:ok, headers} <- Signing.headers(delivery.delivery_id, delivery.secret, body, timestamp) do
-        request_headers =
-          headers
-          |> Enum.reject(fn {name, _value} -> name == "content-type" end)
-          |> Enum.map(fn {name, value} ->
-            {String.to_charlist(name), String.to_charlist(value)}
-          end)
-
-        request = {String.to_charlist(delivery.target_url), request_headers, ~c"application/json", body}
-
-        try do
-          :httpc.request(:post, request,
-            [
-              timeout: @timeout_ms,
-              connect_timeout: 2_000,
-              autoredirect: false,
-              ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
-            ],
-            body_format: :binary
-          )
-        rescue
-          _ -> {:error, :request_failed}
-        catch
-          :exit, _ -> {:error, :request_failed}
-        end
+        PinnedHttpClient.post(target, headers, body)
       end
 
     case result do
-      {:ok, {{_version, status, _reason}, _headers, _response}} when status >= 200 and status < 300 ->
+      {:ok, status} when status >= 200 and status < 300 ->
         EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.acknowledge(delivery.tenant_id, delivery.delivery_id, status)
 
-      {:ok, {{_version, status, _reason}, _headers, _response}}
+      {:ok, status}
       when status in [408, 425, 429] or status >= 500 ->
         EndpointCircuitBreaker.record_failure(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}")
 
-      {:ok, {{_version, status, _reason}, _headers, _response}} ->
-        # A permanent 4xx response proves the endpoint is reachable; do not
-        # open the circuit for an application-level rejection.
+      {:ok, status} ->
+        # A non-retryable 3xx/4xx response proves the endpoint is reachable;
+        # do not open the circuit for an application-level rejection.
         EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}", true)
 

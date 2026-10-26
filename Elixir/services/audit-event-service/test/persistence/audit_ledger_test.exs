@@ -61,8 +61,44 @@ if System.get_env("DATABASE_URL") do
                  [tenant, record.event_id]
                )
 
+      assert {:ok, %{num_rows: 0}} =
+               Postgrex.query(
+                 PesaGuard.AuditEventService.Persistence.PostgresConnection,
+                 "DELETE FROM telixo_audit_events WHERE tenant_id = $1 AND event_id = $2",
+                 [tenant, record.event_id]
+               )
+
       assert {:ok, unchanged} = AuditLedger.get(tenant, record.event_id)
       assert unchanged.action == "security.policy_checked"
+      assert :ok = AuditLedger.verify_chain(tenant)
+    end
+
+    test "verifies a retained chain from a trusted archive anchor" do
+      tenant = "audit-anchor-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      event = %{
+        "actor_type" => "system",
+        "action" => "retention.anchor_test",
+        "occurred_at" => "2026-10-27T00:00:00Z"
+      }
+
+      assert {:ok, first, :created} = AuditLedger.append(tenant, "anchor-first", event)
+      assert {:ok, second, :created} =
+               AuditLedger.append(tenant, "anchor-second", Map.put(event, "action", "retention.anchor_next"))
+
+      archive_hash = :crypto.hash(:sha256, "verified-test-archive") |> Base.encode16(case: :lower)
+
+      assert {:ok, _} =
+               Postgrex.query(
+                 PesaGuard.AuditEventService.Persistence.PostgresConnection,
+                 """
+                 INSERT INTO telixo_audit_chain_anchors
+                   (tenant_id, first_retained_sequence, previous_hash, archived_through_sequence, archive_sha256)
+                 VALUES ($1, 2, $2, 1, $3)
+                 """,
+                 [tenant, first.event_hash, archive_hash]
+               )
+
+      assert second.previous_hash == first.event_hash
       assert :ok = AuditLedger.verify_chain(tenant)
     end
   end

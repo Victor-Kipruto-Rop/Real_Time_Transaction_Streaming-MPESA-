@@ -1,5 +1,7 @@
 defmodule PesaGuard.WebhookDelivery.Domain.Processor do
-  @moduledoc "Validates webhook targets before enqueueing delivery work."
+  @moduledoc "Validates webhook targets and bounds payload size before enqueueing delivery work."
+
+  @max_payload_bytes 1_048_576
 
   def prepare(%{"target_url" => target_url} = command) when is_binary(target_url) do
     uri = URI.parse(target_url)
@@ -15,11 +17,19 @@ defmodule PesaGuard.WebhookDelivery.Domain.Processor do
         {:error, :target_url_private_host_forbidden}
       ip_literal?(host) -> {:error, :target_url_ip_literal_forbidden}
       not is_map(Map.get(command, "payload")) -> {:error, :payload_must_be_object}
-      true -> {:ok, command}
+      true -> validate_payload(command)
     end
   end
 
   def prepare(_), do: {:error, :target_url_required}
+
+  defp validate_payload(command) do
+    case Jason.encode(Map.get(command, "payload")) do
+      {:ok, encoded} when byte_size(encoded) <= @max_payload_bytes -> {:ok, command}
+      {:ok, _encoded} -> {:error, :payload_too_large}
+      {:error, _reason} -> {:error, :invalid_payload}
+    end
+  end
 
   defp ip_literal?(host) do
     normalized_host = host |> String.trim_leading("[") |> String.trim_trailing("]")

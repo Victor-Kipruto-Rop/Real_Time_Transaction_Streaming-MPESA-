@@ -100,7 +100,9 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
              byte_size(event_type) in 1..160 and is_map(payload) do
     with {:ok, subscription} <- get_subscription(tenant_id, subscription_id),
          true <- subscription.active,
-         true <- event_type in subscription.event_types do
+         true <- event_type in subscription.event_types,
+         {:ok, _validated} <-
+           Processor.prepare(%{"target_url" => subscription.target_url, "payload" => payload}) do
       delivery_id = stable_delivery_id(subscription_id, event_id)
       sql = """
       INSERT INTO telixo_customer_webhook_deliveries

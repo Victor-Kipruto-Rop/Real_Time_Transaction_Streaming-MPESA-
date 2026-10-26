@@ -21,5 +21,8 @@ defmodule PesaGuard.AuditEventService.Router do
     post "/records", RecordsController, :create
     get "/records/:id", RecordsController, :show
     patch "/records/:id/state", RecordsController, :transition
+    get "/admin/retention-policy", AdminController, :get_retention_policy
+    put "/admin/retention-policy", AdminController, :update_retention_policy
+    post "/admin/integrity/verify", AdminController, :verify_integrity
   end
 end

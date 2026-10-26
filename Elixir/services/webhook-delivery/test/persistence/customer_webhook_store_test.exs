@@ -29,6 +29,15 @@ if System.get_env("DATABASE_URL") do
       assert {:ok, duplicate, :duplicate} =
                CustomerWebhookStore.create_subscription(tenant, key, target, events, secret)
       assert duplicate.subscription_id == subscription.subscription_id
+
+      assert {:error, :idempotency_conflict} =
+               CustomerWebhookStore.create_subscription(
+                 tenant,
+                 key,
+                 "https://changed-endpoint.example.test/telixo",
+                 events,
+                 secret
+               )
       assert {:error, :idempotency_conflict} =
                CustomerWebhookStore.create_subscription(tenant, key, target, events, String.duplicate("z", 32))
       assert {:ok, []} = CustomerWebhookStore.list_subscriptions(tenant <> "-other")
@@ -58,6 +67,15 @@ if System.get_env("DATABASE_URL") do
       assert {:error, :event_conflict} =
                CustomerWebhookStore.enqueue(tenant, subscription.subscription_id, event_id,
                  "risk.flagged", payload)
+
+      assert {:error, :payload_too_large} =
+               CustomerWebhookStore.enqueue(
+                 tenant,
+                 subscription.subscription_id,
+                 "oversized-" <> Base.encode16(:crypto.strong_rand_bytes(8)),
+                 "reconciliation.completed",
+                 %{"data" => String.duplicate("x", 1_100_000)}
+               )
 
       assert {:ok, claimed} = CustomerWebhookStore.claim(100)
       item = Enum.find(claimed, &(&1.delivery_id == delivery.delivery_id))

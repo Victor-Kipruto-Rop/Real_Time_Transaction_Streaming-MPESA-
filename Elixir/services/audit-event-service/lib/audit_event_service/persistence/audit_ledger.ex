@@ -46,15 +46,25 @@ defmodule PesaGuard.AuditEventService.Persistence.AuditLedger do
   def get(_, _), do: {:error, :not_found}
 
   def verify_chain(tenant_id) when is_binary(tenant_id) do
-    sql = """
-    SELECT event_id, tenant_sequence, idempotency_key, event_payload::text, previous_hash, event_hash
-    FROM telixo_audit_events
-    WHERE tenant_id = $1
-    ORDER BY tenant_sequence ASC
-    """
-
-    with {:ok, %{rows: rows}} <- Postgrex.query(@connection, sql, [tenant_id]) do
-      verify_rows(rows, tenant_id, 1, nil)
+    with {:ok, %{rows: anchor_rows}} <-
+           Postgrex.query(
+             @connection,
+             "SELECT first_retained_sequence, previous_hash FROM telixo_audit_chain_anchors WHERE tenant_id = $1",
+             [tenant_id]
+           ),
+         {first_sequence, previous_hash} <- anchor_position(anchor_rows),
+         {:ok, %{rows: rows}} <-
+           Postgrex.query(
+             @connection,
+             """
+             SELECT event_id, tenant_sequence, idempotency_key, event_payload::text, previous_hash, event_hash
+             FROM telixo_audit_events
+             WHERE tenant_id = $1 AND tenant_sequence >= $2
+             ORDER BY tenant_sequence ASC
+             """,
+             [tenant_id, first_sequence]
+           ) do
+      verify_rows(rows, tenant_id, first_sequence, previous_hash)
     else
       {:error, _} -> {:error, :unavailable}
     end
@@ -63,6 +73,9 @@ defmodule PesaGuard.AuditEventService.Persistence.AuditLedger do
   end
 
   def verify_chain(_), do: {:error, :invalid_tenant}
+
+  defp anchor_position([[first_sequence, previous_hash]]), do: {first_sequence, previous_hash}
+  defp anchor_position([]), do: {1, nil}
 
   defp append_transaction(conn, tenant_id, idempotency_key, event) do
     Postgrex.query!(conn, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [tenant_id])
