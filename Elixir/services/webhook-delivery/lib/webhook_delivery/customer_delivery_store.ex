@@ -1,7 +1,7 @@
 defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
   @moduledoc """
   Durable customer webhook subscriptions and delivery lifecycle. Delivery IDs
-  are deterministic per tenant/subscription/event, making enqueue idempotent.
+  are deterministic per subscription/event and enqueue operations are idempotent.
   """
 
   @connection PesaGuard.WebhookDelivery.Persistence.PostgresConnection
@@ -17,6 +17,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
          {:ok, _} <- Processor.prepare(%{"target_url" => target_url, "payload" => %{}}),
          {:ok, encrypted_secret} <- SecretBox.encrypt(secret) do
       subscription_id = random_id()
+
       sql = """
       INSERT INTO telixo_webhook_subscriptions
         (subscription_id, tenant_id, target_url, encrypted_secret, event_types)
@@ -24,7 +25,9 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
       RETURNING subscription_id, tenant_id, target_url, event_types, active, created_at
       """
 
-      case Postgrex.query(@connection, sql, [subscription_id, tenant_id, target_url, encrypted_secret, event_types]) do
+      case Postgrex.query(@connection, sql, [
+             subscription_id, tenant_id, target_url, encrypted_secret, event_types
+           ]) do
         {:ok, %{rows: [row]}} -> {:ok, decode_subscription(row)}
         {:error, _} -> {:error, :unavailable}
       end
@@ -54,29 +57,49 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
     _ -> {:error, :unavailable}
   end
 
-  def enqueue_event(tenant_id, event)
-      when is_binary(tenant_id) and is_map(event) do
+  def enqueue_event(tenant_id, event) when is_binary(tenant_id) and is_map(event) do
     event_id = Map.get(event, "event_id")
     event_type = Map.get(event, "event_type")
 
     with true <- valid_event_id?(event_id),
          true <- valid_event_type?(event_type),
          {:ok, encoded_event} <- Jason.encode(event) do
-      sql = """
-      INSERT INTO telixo_webhook_deliveries
-        (delivery_id, tenant_id, subscription_id, event_id, event_type, event_payload)
-      SELECT
-        encode(digest(convert_to(s.subscription_id || ':' || $3, 'UTF8'), 'sha256'), 'hex'),
-        s.tenant_id, s.subscription_id, $3, $4, $5::text::jsonb
-      FROM telixo_webhook_subscriptions s
-      WHERE s.tenant_id = $1 AND s.active = TRUE
-        AND (s.event_types @> ARRAY[$4]::text[] OR '*' = ANY(s.event_types))
-      ON CONFLICT (tenant_id, subscription_id, event_id) DO NOTHING
-      RETURNING delivery_id
-      """
+      result =
+        Postgrex.transaction(@connection, fn conn ->
+          subscriptions_sql = """
+          SELECT subscription_id
+          FROM telixo_webhook_subscriptions
+          WHERE tenant_id = $1 AND active = TRUE
+            AND (event_types @> ARRAY[$2]::text[] OR '*' = ANY(event_types))
+          ORDER BY subscription_id
+          """
 
-      case Postgrex.query(@connection, sql, [tenant_id, event, event_id, event_type, encoded_event]) do
-        {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, fn [id] -> id end)}
+          subscriptions =
+            Postgrex.query!(conn, subscriptions_sql, [tenant_id, event_type]).rows
+
+          Enum.reduce(subscriptions, [], fn [subscription_id], acc ->
+            delivery_id = stable_delivery_id(subscription_id, event_id)
+
+            insert_sql = """
+            INSERT INTO telixo_webhook_deliveries
+              (delivery_id, tenant_id, subscription_id, event_id, event_type, event_payload)
+            VALUES ($1, $2, $3, $4, $5, $6::text::jsonb)
+            ON CONFLICT (tenant_id, subscription_id, event_id) DO NOTHING
+            RETURNING delivery_id
+            """
+
+            case Postgrex.query!(conn, insert_sql, [
+                   delivery_id, tenant_id, subscription_id, event_id, event_type, encoded_event
+                 ]).rows do
+              [[id]] -> [id | acc]
+              [] -> acc
+            end
+          end)
+          |> Enum.reverse()
+        end)
+
+      case result do
+        {:ok, ids} -> {:ok, ids}
         {:error, _} -> {:error, :unavailable}
       end
     else
@@ -134,10 +157,15 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
   end
 
   def fail_delivery(tenant_id, delivery_id, attempts, failure, status_code \\ nil)
-      when is_binary(tenant_id) and is_binary(delivery_id) and is_integer(attempts) and is_binary(failure) do
-    retry? = attempts < 8 and (status_code in [408, 425, 429] or is_nil(status_code) or status_code >= 500)
-    delay = min(1_000 * Integer.pow(2, min(attempts - 1, 8)), 300_000)
+      when is_binary(tenant_id) and is_binary(delivery_id) and is_integer(attempts) and
+             is_binary(failure) do
+    retry? =
+      attempts < 8 and
+        (status_code in [408, 425, 429] or is_nil(status_code) or status_code >= 500)
+
+    delay = min(1_000 * Integer.pow(2, max(min(attempts - 1, 8), 0)), 300_000)
     status = if retry?, do: "pending", else: "dead_lettered"
+
     sql = """
     UPDATE telixo_webhook_deliveries
     SET status = $3, next_attempt_at = now() + ($4 * interval '1 millisecond'),
@@ -145,7 +173,11 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
         lease_expires_at = NULL
     WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'in_progress'
     """
-    update_one(sql, [tenant_id, delivery_id, status, if(retry?, do: delay, else: 0), status_code, String.slice(failure, 0, 120)])
+
+    update_one(sql, [
+      tenant_id, delivery_id, status, if(retry?, do: delay, else: 0),
+      status_code, String.slice(failure, 0, 120)
+    ])
   end
 
   def get_delivery(tenant_id, delivery_id) when is_binary(tenant_id) and is_binary(delivery_id) do
@@ -174,25 +206,46 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
     _ -> {:error, :unavailable}
   end
 
-  defp valid_event_types?(types), do: length(types) in 1..50 and Enum.all?(types, &valid_event_type?/1) and length(Enum.uniq(types)) == length(types)
-  defp valid_event_type?(value), do: is_binary(value) and byte_size(value) in 1..160 and String.match?(value, ~r/\A[a-zA-Z0-9._*-]+\z/)
+  defp valid_event_types?(types) do
+    length(types) in 1..50 and Enum.all?(types, &valid_event_type?/1) and
+      length(Enum.uniq(types)) == length(types)
+  end
+
+  defp valid_event_type?(value) do
+    is_binary(value) and byte_size(value) in 1..160 and
+      String.match?(value, ~r/\\A[a-zA-Z0-9._*-]+\\z/)
+  end
+
   defp valid_event_id?(value), do: is_binary(value) and byte_size(value) in 1..200
   defp random_id, do: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
 
+  defp stable_delivery_id(subscription_id, event_id) do
+    :crypto.hash(:sha256, Jason.encode!([subscription_id, event_id]))
+    |> Base.url_encode64(padding: false)
+  end
+
   defp decode_subscription([id, tenant, url, types, active, created]) do
-    %{subscription_id: id, tenant_id: tenant, target_url: url, event_types: types, active: active, created_at: DateTime.to_iso8601(created)}
+    %{
+      subscription_id: id, tenant_id: tenant, target_url: url, event_types: types,
+      active: active, created_at: DateTime.to_iso8601(created)
+    }
   end
 
   defp decode_delivery([id, tenant, subscription_id, event_id, event_type, payload, attempts, url, encrypted_secret]) do
-    %{delivery_id: id, tenant_id: tenant, subscription_id: subscription_id, event_id: event_id,
-      event_type: event_type, event: Jason.decode!(payload), attempts: attempts, target_url: url,
-      encrypted_secret: encrypted_secret}
+    %{
+      delivery_id: id, tenant_id: tenant, subscription_id: subscription_id, event_id: event_id,
+      event_type: event_type, event: Jason.decode!(payload), attempts: attempts,
+      target_url: url, encrypted_secret: encrypted_secret
+    }
   end
 
   defp decode_history([id, tenant, subscription_id, event_id, event_type, status, attempts, status_code, error_code, created, updated, delivered]) do
-    %{delivery_id: id, tenant_id: tenant, subscription_id: subscription_id, event_id: event_id,
+    %{
+      delivery_id: id, tenant_id: tenant, subscription_id: subscription_id, event_id: event_id,
       event_type: event_type, status: status, attempts: attempts, last_status_code: status_code,
       last_error_code: error_code, created_at: DateTime.to_iso8601(created),
-      updated_at: DateTime.to_iso8601(updated), delivered_at: if(delivered, do: DateTime.to_iso8601(delivered), else: nil)}
+      updated_at: DateTime.to_iso8601(updated),
+      delivered_at: if(delivered, do: DateTime.to_iso8601(delivered), else: nil)
+    }
   end
 end
