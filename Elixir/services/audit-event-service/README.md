@@ -18,3 +18,10 @@ Standalone Phoenix application with an OTP supervision tree, JSON health/readine
 - Test restart recovery, duplicate events, poison messages, timeouts and downstream outages.
 
 The current endpoints are scaffold health checks, not proof of domain implementation or production readiness.
+
+
+## Append-only audit ledger
+
+Audit-event writes use a dedicated PostgreSQL ledger instead of the mutable generic record state machine. Each tenant has a serialized sequence and SHA-256 hash chain; appends, tenant-head updates, and audit-event-service.audit_event_appended outbox insertion commit in one transaction. Idempotency keys return the original event for identical retries and conflict if reused for a different event. The database migration blocks row updates/deletes through append-only rules, and AuditLedger.verify_chain/1 checks sequence, previous-hash linkage and event hashes.
+
+The hash chain provides tamper-evidence within the database trust boundary; it is not a substitute for external/WORM backups, privileged-role separation, retention controls, or independent periodic verification. The generic state-transition endpoint is disabled for audit events. CI and PostgreSQL integration tests must pass before promotion.
