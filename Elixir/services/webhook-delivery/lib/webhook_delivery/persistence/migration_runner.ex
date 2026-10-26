@@ -45,6 +45,9 @@ defmodule PesaGuard.WebhookDelivery.Persistence.MigrationRunner do
   end
 
   defp apply_migration(conn, service_name, version, checksum, sql) do
+    # Serialize migration application across service replicas and shared schemas.
+    Postgrex.query!(conn, "SELECT pg_advisory_xact_lock(73194021, 1)", [])
+
     case Postgrex.query!(conn,
            "SELECT checksum FROM telixo_schema_migrations WHERE service_name = $1 AND version = $2",
            [service_name, version]
