@@ -4,6 +4,7 @@ defmodule PesaGuard.NotificationService.RecordsController do
   alias PesaGuard.NotificationService.Domain.Processor
   alias PesaGuard.NotificationService.Domain.Service
   alias PesaGuard.NotificationService.Persistence.PostgresStore
+  alias PesaGuard.NotificationService.Persistence.PolicyStore
 
   def create(conn, params) do
     tenant_id = conn.assigns.tenant_context.tenant_id
@@ -25,9 +26,16 @@ defmodule PesaGuard.NotificationService.RecordsController do
         command = params |> Map.put("tenant_id", tenant_id) |> Map.drop(["record_type"])
 
         with {:ok, validated} <- Service.validate_command(command),
-             {:ok, prepared} <- Processor.prepare(validated) do
+             {:ok, prepared} <- Processor.prepare(validated),
+             :ok <- PolicyStore.authorize(tenant_id, prepared) do
           persist(conn, tenant_id, kind, idempotency_key, prepared)
         else
+          {:error, reason} when reason in [:consent_record_unavailable, :consent_not_granted, :consent_purpose_missing, :channel_preference_disabled, :recipient_suppressed] ->
+            conn |> put_status(:forbidden) |> json(%{error: "notification_policy_denied", reason: Atom.to_string(reason)})
+
+          {:error, :policy_store_unavailable} ->
+            conn |> put_status(:service_unavailable) |> json(%{error: "notification_policy_unavailable"})
+
           {:error, {:missing_fields, fields}} ->
             conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_command", fields: fields})
 
