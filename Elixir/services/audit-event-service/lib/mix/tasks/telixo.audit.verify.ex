@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
 
   @impl Mix.Task
   def run(_args) do
-    Mix.Task.run("app.start")
+    Application.ensure_all_started(:postgrex)
 
     verify_url = System.get_env("AUDIT_VERIFY_DATABASE_URL")
     writer_url = System.get_env("DATABASE_URL")
