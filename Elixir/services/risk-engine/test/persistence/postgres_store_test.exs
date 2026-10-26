@@ -20,6 +20,25 @@ if System.get_env("DATABASE_URL") do
                )
 
       assert record.payload == payload
+      assert {:error, :not_found} = PostgresStore.get(tenant_id <> "-other", record.record_id)
+
+      assert {:ok, updated} =
+               PostgresStore.transition(
+                 tenant_id,
+                 record.record_id,
+                 Service.initial_state(),
+                 "integration-test-transition"
+               )
+
+      assert updated.state == "integration-test-transition"
+      assert {:error, :conflict} =
+               PostgresStore.transition(
+                 tenant_id,
+                 record.record_id,
+                 Service.initial_state(),
+                 "stale-transition"
+               )
+
       assert {:ok, duplicate, :duplicate} =
                PostgresStore.insert_once(
                  tenant_id,
@@ -45,6 +64,14 @@ if System.get_env("DATABASE_URL") do
       assert event.tenant_id == tenant_id
       assert event.payload["payload"]["data"] == payload
       assert :ok = PostgresStore.acknowledge_outbox(tenant_id, record.record_id)
+
+      transition_event =
+        Enum.find(events, &(&1.event_type == "#{record.service_name}.record_state_changed"))
+
+      assert transition_event
+      assert transition_event.payload["payload"]["from_state"] == Service.initial_state()
+      assert transition_event.payload["payload"]["to_state"] == "integration-test-transition"
+      assert :ok = PostgresStore.acknowledge_outbox(tenant_id, transition_event.event_id)
     end
   end
 end
