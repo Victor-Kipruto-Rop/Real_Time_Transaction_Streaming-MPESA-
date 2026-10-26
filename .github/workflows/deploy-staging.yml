@@ -70,14 +70,14 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit -q --maxfail=1
+          pytest Python/tests/unit -q --maxfail=1
 
       - name: Run E2E smoke tests
         env:
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           REQUIRE_WEBHOOK_SIGNATURE: "true"
         run: |
-          pytest tests/e2e/smoke_tests.py -q --maxfail=1
+          pytest Python/tests/e2e/smoke_tests.py -q --maxfail=1
 
       - name: Upload coverage
         if: always()
@@ -266,7 +266,7 @@ jobs:
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           REQUIRE_WEBHOOK_SIGNATURE: "true"
         run: |
-          pytest tests/e2e/smoke_tests.py -q --maxfail=1 --staging
+          pytest Python/tests/e2e/smoke_tests.py -q --maxfail=1 --staging
 
       - name: Capture pod diagnostics on failure
         if: failure()
