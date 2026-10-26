@@ -82,8 +82,8 @@ services:
         condition: service_healthy
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./Infrastructure/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./Infrastructure/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   webhook-receiver:
     build:
@@ -136,8 +136,8 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./ingestion:/app/ingestion:ro
-      - ./schemas:/app/schemas:ro
+      - ./Python/ingestion:/app/ingestion:ro
+      - ./Python/schemas:/app/schemas:ro
 
   kafka-consumer:
     build:
@@ -160,8 +160,8 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./streaming:/app/streaming:ro
-      - ./schemas:/app/schemas:ro
+      - ./Python/streaming:/app/streaming:ro
+      - ./Python/schemas:/app/schemas:ro
 
   dbt:
     image: ghcr.io/dbt-labs/dbt-postgres:latest
@@ -178,7 +178,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./dbt:/app/dbt
+      - ./Python/dbt:/app/dbt
 
   jupyter:
     image: jupyter/minimal-notebook:latest

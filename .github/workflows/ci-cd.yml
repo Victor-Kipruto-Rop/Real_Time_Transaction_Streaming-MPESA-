@@ -1,5 +1,8 @@
 name: CI/CD Pipeline - M-Pesa Streaming
 
+env:
+  PYTHONPATH: Python
+
 on:
   push:
     branches: [ main, develop ]
@@ -33,15 +36,15 @@ jobs:
           pip install -r requirements-dev.txt
       
       - name: Run Black (code formatting)
-        run: black --check ingestion/ streaming/ schemas/ tests/
+        run: black --check Python/ingestion/ Python/streaming/ Python/schemas/ Python/tests/
       
       - name: Run Flake8 (linting)
         continue-on-error: true
-        run: flake8 ingestion/ streaming/ schemas/ tests/ --max-line-length=100 --count --statistics --extend-ignore=E228,E722,F401,F541,F811,F841
+        run: flake8 Python/ingestion/ Python/streaming/ Python/schemas/ Python/tests/ --max-line-length=100 --count --statistics --extend-ignore=E228,E722,F401,F541,F811,F841
       
       - name: Run isort (import sorting)
         continue-on-error: true
-        run: isort --check-only ingestion/ streaming/ schemas/ tests/
+        run: isort --check-only Python/ingestion/ Python/streaming/ Python/schemas/ Python/tests/
 
   # ===================================================================
   # Type Checking
@@ -65,7 +68,7 @@ jobs:
           pip install -r requirements.txt
       
       - name: Run mypy type checker
-        run: mypy ingestion/ streaming/ schemas/ --ignore-missing-imports --no-error-summary || true
+        run: mypy Python/ingestion/ Python/streaming/ Python/schemas/ --ignore-missing-imports --no-error-summary || true
 
   # ===================================================================
   # Unit Tests
@@ -132,7 +135,7 @@ jobs:
       
       - name: Run pytest with coverage
         run: |
-          pytest tests/ -v --cov=ingestion --cov=streaming --cov=schemas --cov-report=xml --cov-report=term-missing
+          pytest Python/tests/ -v --cov=ingestion --cov=streaming --cov=schemas --cov-report=xml --cov-report=term-missing
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
@@ -167,7 +170,7 @@ jobs:
         run: pip install bandit[toml]
       
       - name: Run Bandit security check
-        run: bandit -r ingestion/ streaming/ schemas/ -f json -o bandit-report.json || true
+        run: bandit -r Python/ingestion/ Python/streaming/ Python/schemas/ -f json -o bandit-report.json || true
       
       - name: Check for secrets (truffleHog)
         if: github.event_name == 'pull_request'

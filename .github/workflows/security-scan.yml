@@ -1,5 +1,8 @@
 name: Security Scan
 
+env:
+  PYTHONPATH: Python
+
 on:
   push:
     branches: [ main, develop ]
@@ -34,7 +37,7 @@ jobs:
 
       - name: Run Bandit security linter
         run: |
-          bandit -r app/ ingestion/ -f json -o bandit-report.json || true
+          bandit -r Python/app/ Python/ingestion/ -f json -o bandit-report.json || true
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
