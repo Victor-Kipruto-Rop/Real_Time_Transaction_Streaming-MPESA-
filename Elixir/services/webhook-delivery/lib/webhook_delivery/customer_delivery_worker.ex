@@ -87,8 +87,8 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}")
 
       {:ok, status} ->
-        # A permanent 4xx response proves the endpoint is reachable; do not
-        # open the circuit for an application-level rejection.
+        # A non-retryable 3xx/4xx response proves the endpoint is reachable;
+        # do not open the circuit for an application-level rejection.
         EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}", true)
 
