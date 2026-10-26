@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.pesaguard.co.ke/events/transaction-normalized-v1.schema.json",
+  "title": "PesaGuard Normalized Transaction Event v1",
+  "description": "Proposed internal event contract. Not a provider callback schema and not proof of settlement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "source",
+    "occurred_at",
+    "ingested_at",
+    "correlation_id",
+    "tenant_id",
+    "merchant_id",
+    "transaction"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "event_type": {
+      "const": "transaction.normalized.v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "safaricom_daraja"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ingested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Resolved from trusted server-side merchant/provider configuration; never trusted directly from public callback input."
+    },
+    "merchant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_transaction_id",
+        "amount",
+        "currency",
+        "provider_status"
+      ],
+      "properties": {
+        "provider_transaction_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\\\.[0-9]{1,4})?$",
+          "description": "Decimal string; do not use binary floating point."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "provider_status": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "account_reference": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "provider_occurred_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": [
+        "internal",
+        "confidential"
+      ],
+      "default": "confidential"
+    }
+  }
+}
