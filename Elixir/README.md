@@ -82,3 +82,6 @@ Before promotion, run `mix format --check-formatted`, `MIX_ENV=test mix compile 
 
 
 Deployment passwords used in DATABASE_URL should be URL-safe (letters, digits, and hyphens are recommended) unless the connection string is percent-encoded correctly.
+
+
+Implementation note: the current pull request is intentionally a draft. Do not promote or deploy until the listed service-specific gaps are closed and the complete CI matrix passes.
