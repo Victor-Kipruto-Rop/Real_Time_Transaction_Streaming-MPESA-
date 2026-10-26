@@ -29,7 +29,11 @@ func loadConfig() (Config, error) {
 		Port: strings.TrimSpace(os.Getenv("PORT")),
 	}
 	if cfg.InstanceID == "" {
-		cfg.InstanceID = "go-event-relay"
+		host, err := os.Hostname()
+		if err != nil || strings.TrimSpace(host) == "" {
+			host = "unknown-host"
+		}
+		cfg.InstanceID = host + "-" + strconv.Itoa(os.Getpid())
 	}
 	if cfg.Port == "" {
 		cfg.Port = "8081"
