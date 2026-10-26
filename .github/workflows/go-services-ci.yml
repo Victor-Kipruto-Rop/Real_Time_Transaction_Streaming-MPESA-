@@ -24,6 +24,8 @@ jobs:
           - event-relay
           - quota-engine
           - infrastructure-monitor
+    env:
+      GOWORK: off
     defaults:
       run:
         working-directory: Go/services/${{ matrix.service }}
