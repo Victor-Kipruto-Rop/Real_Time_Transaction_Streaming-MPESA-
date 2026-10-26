@@ -14,7 +14,7 @@ defmodule PesaGuard.WebhookDelivery.OutboxReplayController do
       not authorized?(claims) ->
         conn |> put_status(:forbidden) |> json(%{error: "outbox_replay_forbidden"})
 
-      String.trim(reason) |> String.length() not in 10..500 ->
+      String.length(String.trim(reason)) not in 10..500 ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "replay_reason_must_be_10_to_500_characters"})
 
       true ->
