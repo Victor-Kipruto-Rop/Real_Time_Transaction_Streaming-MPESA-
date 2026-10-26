@@ -59,7 +59,7 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
     end
   end
 
-  defp public_address?({a, _b, _c, _d, _e, _f, _g, _h}) do
+  defp public_address?({a, b, _c, _d, _e, _f, _g, _h}) do
     # Global unicast IPv6 currently occupies 2000::/3. Reject ULA, link-local,
     # loopback, unspecified, multicast, and IPv4-mapped addresses by default.
     a >= 0x2000 and a <= 0x3FFF and not (a == 0x2001 and b == 0x0DB8)
