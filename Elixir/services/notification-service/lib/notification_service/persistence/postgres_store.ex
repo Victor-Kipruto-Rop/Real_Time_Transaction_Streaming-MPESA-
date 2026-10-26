@@ -71,7 +71,20 @@ defmodule PesaGuard.NotificationService.Persistence.PostgresStore do
     """
 
     case Postgrex.transaction(@connection, fn conn ->
-           case Postgrex.query!(conn, record_sql, [
+           policy_result =
+             if Map.has_key?(payload, "recipient_ref") or Map.has_key?(payload, "channel") do
+               PesaGuard.NotificationService.Persistence.PolicyStore.authorize_with_connection(
+                 conn,
+                 tenant_id,
+                 payload
+               )
+             else
+               :ok
+             end
+
+           case policy_result do
+             :ok ->
+               case Postgrex.query!(conn, record_sql, [
                   record_id,
                   @service,
                   tenant_id,
@@ -127,9 +140,13 @@ defmodule PesaGuard.NotificationService.Persistence.PostgresStore do
                  [] ->
                    {:error, :conflict}
                end
+               end
+             {:error, reason} ->
+               Postgrex.rollback(conn, {:policy_denied, reason})
            end
          end) do
       {:ok, result} -> result
+      {:error, {:policy_denied, reason}} -> {:error, reason}
       {:error, _reason} -> {:error, :unavailable}
     end
   rescue
