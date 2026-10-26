@@ -8,7 +8,7 @@ defmodule PesaGuard.FraudDetection.Domain.ServiceTest do
   end
 
   test "accepts commands with required fields" do
-    command = Map.new(["signal_id","tenant_id","source_event_id","rule_version"], fn key -> {key, "value"} end)
+    command = Map.new(["signal_id", "tenant_id", "source_event_id", "rule_version"], fn key -> {key, "value"} end)
     assert {:ok, ^command} = Service.validate_command(command)
   end
 

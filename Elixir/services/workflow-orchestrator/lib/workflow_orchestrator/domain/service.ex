@@ -1,12 +1,17 @@
 defmodule PesaGuard.WorkflowOrchestrator.Domain.Service do
-  @moduledoc "workflow-orchestrator command validation and lifecycle contract. No external side effects."
+  @moduledoc "workflow-orchestrator command validation and lifecycle rules."
 
-  @required_fields ["workflow_id","tenant_id","workflow_type","version"]
-  @terminal_states ["succeeded","cancelled"]
-  @states ["pending","running","waiting","succeeded","failed","cancelled"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["workflow_id", "tenant_id", "workflow_type", "version"]
+  @terminal_states ["succeeded", "cancelled"]
+  @states ["pending", "running", "waiting", "succeeded", "failed", "cancelled"]
+  @transitions %{
+    "pending" => ["running", "cancelled"],
+    "running" => ["waiting", "succeeded", "failed", "cancelled"],
+    "waiting" => ["running", "cancelled"],
+    "succeeded" => [],
+    "failed" => ["running", "cancelled"],
+    "cancelled" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

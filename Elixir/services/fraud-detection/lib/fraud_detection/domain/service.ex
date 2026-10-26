@@ -1,12 +1,15 @@
 defmodule PesaGuard.FraudDetection.Domain.Service do
-  @moduledoc "fraud-detection command validation and lifecycle contract. No external side effects."
+  @moduledoc "fraud-detection command validation and lifecycle rules."
 
-  @required_fields ["signal_id","tenant_id","source_event_id","rule_version"]
+  @required_fields ["signal_id", "tenant_id", "source_event_id", "rule_version"]
   @terminal_states ["dismissed"]
-  @states ["received","evaluated","escalated","dismissed"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @states ["received", "evaluated", "escalated", "dismissed"]
+  @transitions %{
+    "received" => ["evaluated"],
+    "evaluated" => ["escalated", "dismissed"],
+    "escalated" => ["dismissed"],
+    "dismissed" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

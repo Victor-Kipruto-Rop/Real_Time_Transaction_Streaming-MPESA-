@@ -1,12 +1,14 @@
 defmodule PesaGuard.AuditEventService.Domain.Service do
-  @moduledoc "audit-event-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "audit-event-service command validation and lifecycle rules."
 
-  @required_fields ["event_id","tenant_id","actor_type","action","occurred_at"]
-  @terminal_states ["persisted","rejected"]
-  @states ["accepted","persisted","rejected"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["event_id", "tenant_id", "actor_type", "action", "occurred_at"]
+  @terminal_states ["persisted", "rejected"]
+  @states ["accepted", "persisted", "rejected"]
+  @transitions %{
+    "accepted" => ["persisted", "rejected"],
+    "persisted" => [],
+    "rejected" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

@@ -1,12 +1,17 @@
 defmodule PesaGuard.DataExportService.Domain.Service do
-  @moduledoc "data-export-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "data-export-service command validation and lifecycle rules."
 
-  @required_fields ["job_id","tenant_id","requested_by","format","scope"]
-  @terminal_states ["expired","cancelled"]
-  @states ["queued","running","ready","failed","expired","cancelled"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["job_id", "tenant_id", "requested_by", "format", "scope"]
+  @terminal_states ["expired", "cancelled"]
+  @states ["queued", "running", "ready", "failed", "expired", "cancelled"]
+  @transitions %{
+    "queued" => ["running", "cancelled"],
+    "running" => ["ready", "failed", "cancelled"],
+    "ready" => ["expired"],
+    "failed" => ["queued", "expired"],
+    "expired" => [],
+    "cancelled" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

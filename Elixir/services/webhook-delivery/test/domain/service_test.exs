@@ -8,7 +8,7 @@ defmodule PesaGuard.WebhookDelivery.Domain.ServiceTest do
   end
 
   test "accepts commands with required fields" do
-    command = Map.new(["event_id","tenant_id","subscription_id","target_url","payload"], fn key -> {key, "value"} end)
+    command = Map.new(["event_id", "tenant_id", "subscription_id", "target_url", "payload"], fn key -> {key, "value"} end)
     assert {:ok, ^command} = Service.validate_command(command)
   end
 

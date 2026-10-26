@@ -1,12 +1,16 @@
 defmodule PesaGuard.WebhookDelivery.Domain.Service do
-  @moduledoc "webhook-delivery command validation and lifecycle contract. No external side effects."
+  @moduledoc "webhook-delivery command validation and lifecycle rules."
 
-  @required_fields ["event_id","tenant_id","subscription_id","target_url","payload"]
-  @terminal_states ["delivered","dead_lettered"]
-  @states ["pending","in_progress","delivered","retryable_failure","dead_lettered"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["event_id", "tenant_id", "subscription_id", "target_url", "payload"]
+  @terminal_states ["delivered", "dead_lettered"]
+  @states ["pending", "in_progress", "delivered", "retryable_failure", "dead_lettered"]
+  @transitions %{
+    "pending" => ["in_progress"],
+    "in_progress" => ["delivered", "retryable_failure"],
+    "delivered" => [],
+    "retryable_failure" => ["in_progress", "dead_lettered"],
+    "dead_lettered" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

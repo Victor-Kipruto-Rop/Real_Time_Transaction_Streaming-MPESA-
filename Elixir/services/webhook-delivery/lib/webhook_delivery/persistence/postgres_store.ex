@@ -46,11 +46,13 @@ defmodule PesaGuard.WebhookDelivery.Persistence.PostgresStore do
   end
 
   def children do
-    case System.get_env("DATABASE_URL") do
-      url when is_binary(url) and url != "" ->
+    environment = Application.get_env(:webhook_delivery, :environment)
+
+    case {System.get_env("DATABASE_URL"), environment} do
+      {url, _} when is_binary(url) and url != "" ->
         [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
 
-      _ when Application.get_env(:webhook_delivery, :environment) == :prod ->
+      {_, :prod} ->
         raise "DATABASE_URL must be configured in production"
 
       _ ->

@@ -1,12 +1,14 @@
 defmodule PesaGuard.RiskEngine.Domain.Service do
-  @moduledoc "risk-engine command validation and lifecycle contract. No external side effects."
+  @moduledoc "risk-engine command validation and lifecycle rules."
 
-  @required_fields ["assessment_id","tenant_id","subject_ref","model_or_rule_version"]
-  @terminal_states ["unavailable"]
-  @states ["requested","evaluated","unavailable"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["assessment_id", "tenant_id", "subject_ref", "model_or_rule_version"]
+  @terminal_states ["evaluated", "unavailable"]
+  @states ["requested", "evaluated", "unavailable"]
+  @transitions %{
+    "requested" => ["evaluated", "unavailable"],
+    "evaluated" => [],
+    "unavailable" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

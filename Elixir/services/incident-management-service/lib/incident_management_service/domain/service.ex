@@ -1,12 +1,17 @@
 defmodule PesaGuard.IncidentManagementService.Domain.Service do
-  @moduledoc "incident-management-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "incident-management-service command validation and lifecycle rules."
 
-  @required_fields ["incident_id","tenant_id","severity","summary","opened_at"]
-  @terminal_states ["resolved","closed"]
-  @states ["open","acknowledged","investigating","mitigating","resolved","closed"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["incident_id", "tenant_id", "severity", "summary", "opened_at"]
+  @terminal_states ["resolved", "closed"]
+  @states ["open", "acknowledged", "investigating", "mitigating", "resolved", "closed"]
+  @transitions %{
+    "open" => ["acknowledged", "closed"],
+    "acknowledged" => ["investigating", "closed"],
+    "investigating" => ["mitigating", "resolved"],
+    "mitigating" => ["resolved"],
+    "resolved" => ["closed"],
+    "closed" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

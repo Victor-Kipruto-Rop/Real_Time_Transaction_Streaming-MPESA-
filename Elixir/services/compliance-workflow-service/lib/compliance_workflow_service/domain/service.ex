@@ -1,12 +1,18 @@
 defmodule PesaGuard.ComplianceWorkflowService.Domain.Service do
-  @moduledoc "compliance-workflow-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "compliance-workflow-service command validation and lifecycle rules."
 
-  @required_fields ["case_id","tenant_id","policy_version","evidence_refs"]
-  @terminal_states ["approved","rejected","closed"]
-  @states ["opened","evidence_pending","under_review","action_required","approved","rejected","closed"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["case_id", "tenant_id", "policy_version", "evidence_refs"]
+  @terminal_states ["approved", "rejected", "closed"]
+  @states ["opened", "evidence_pending", "under_review", "action_required", "approved", "rejected", "closed"]
+  @transitions %{
+    "opened" => ["evidence_pending", "rejected"],
+    "evidence_pending" => ["under_review", "action_required", "rejected"],
+    "under_review" => ["action_required", "approved", "rejected"],
+    "action_required" => ["under_review", "approved", "rejected"],
+    "approved" => ["closed"],
+    "rejected" => ["closed"],
+    "closed" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

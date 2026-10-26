@@ -1,12 +1,17 @@
 defmodule PesaGuard.NotificationService.Domain.Service do
-  @moduledoc "notification-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "notification-service command validation and lifecycle rules."
 
-  @required_fields ["event_id","tenant_id","recipient_ref","channel","template_id"]
-  @terminal_states ["sent","permanently_failed"]
-  @states ["queued","sending","sent","retryable_failure","permanently_failed","suppressed"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["event_id", "tenant_id", "recipient_ref", "channel", "template_id"]
+  @terminal_states ["sent", "permanently_failed", "suppressed"]
+  @states ["queued", "sending", "sent", "retryable_failure", "permanently_failed", "suppressed"]
+  @transitions %{
+    "queued" => ["sending", "suppressed"],
+    "sending" => ["sent", "retryable_failure", "permanently_failed"],
+    "sent" => [],
+    "retryable_failure" => ["sending", "permanently_failed"],
+    "permanently_failed" => [],
+    "suppressed" => []
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

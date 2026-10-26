@@ -8,7 +8,7 @@ defmodule PesaGuard.RiskEngine.Domain.ServiceTest do
   end
 
   test "accepts commands with required fields" do
-    command = Map.new(["assessment_id","tenant_id","subject_ref","model_or_rule_version"], fn key -> {key, "value"} end)
+    command = Map.new(["assessment_id", "tenant_id", "subject_ref", "model_or_rule_version"], fn key -> {key, "value"} end)
     assert {:ok, ^command} = Service.validate_command(command)
   end
 

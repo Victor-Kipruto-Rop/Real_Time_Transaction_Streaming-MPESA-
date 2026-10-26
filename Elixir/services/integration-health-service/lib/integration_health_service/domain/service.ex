@@ -1,12 +1,16 @@
 defmodule PesaGuard.IntegrationHealthService.Domain.Service do
-  @moduledoc "integration-health-service command validation and lifecycle contract. No external side effects."
+  @moduledoc "integration-health-service command validation and lifecycle rules."
 
-  @required_fields ["check_id","tenant_id","integration_id","check_type"]
-  @terminal_states ["healthy","unavailable"]
-  @states ["scheduled","running","healthy","degraded","unavailable"]
-  @transitions Enum.zip(@states, Enum.drop(@states, 1))
-    |> Map.new(fn {from, to} -> {from, [to]} end)
-    |> Map.put(List.last(@states), [])
+  @required_fields ["check_id", "tenant_id", "integration_id", "check_type"]
+  @terminal_states []
+  @states ["scheduled", "running", "healthy", "degraded", "unavailable"]
+  @transitions %{
+    "scheduled" => ["running"],
+    "running" => ["healthy", "degraded", "unavailable"],
+    "healthy" => ["running", "degraded"],
+    "degraded" => ["running", "unavailable"],
+    "unavailable" => ["running"]
+  }
 
   @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
   def validate_command(command) when is_map(command) do

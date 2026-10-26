@@ -46,11 +46,13 @@ defmodule PesaGuard.NotificationService.Persistence.PostgresStore do
   end
 
   def children do
-    case System.get_env("DATABASE_URL") do
-      url when is_binary(url) and url != "" ->
+    environment = Application.get_env(:notification_service, :environment)
+
+    case {System.get_env("DATABASE_URL"), environment} do
+      {url, _} when is_binary(url) and url != "" ->
         [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
 
-      _ when Application.get_env(:notification_service, :environment) == :prod ->
+      {_, :prod} ->
         raise "DATABASE_URL must be configured in production"
 
       _ ->

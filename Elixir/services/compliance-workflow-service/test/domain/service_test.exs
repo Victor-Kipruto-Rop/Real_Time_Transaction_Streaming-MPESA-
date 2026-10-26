@@ -8,7 +8,7 @@ defmodule PesaGuard.ComplianceWorkflowService.Domain.ServiceTest do
   end
 
   test "accepts commands with required fields" do
-    command = Map.new(["case_id","tenant_id","policy_version","evidence_refs"], fn key -> {key, "value"} end)
+    command = Map.new(["case_id", "tenant_id", "policy_version", "evidence_refs"], fn key -> {key, "value"} end)
     assert {:ok, ^command} = Service.validate_command(command)
   end
 

@@ -8,7 +8,7 @@ defmodule PesaGuard.DataExportService.Domain.ServiceTest do
   end
 
   test "accepts commands with required fields" do
-    command = Map.new(["job_id","tenant_id","requested_by","format","scope"], fn key -> {key, "value"} end)
+    command = Map.new(["job_id", "tenant_id", "requested_by", "format", "scope"], fn key -> {key, "value"} end)
     assert {:ok, ^command} = Service.validate_command(command)
   end
 
