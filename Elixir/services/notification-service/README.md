@@ -19,11 +19,12 @@ Standalone Phoenix application with an OTP supervision tree, JSON health/readine
 
 The current endpoints are scaffold health checks, not proof of domain implementation or production readiness.
 
-
 ## Persisted notification policy gate
 
-The `002_notification_policy_records.sql` migration adds tenant-scoped consent, channel-preference, and recipient-suppression records. `Persistence.PolicyStore` reads those authoritative PostgreSQL rows and applies `Domain.DispatchPolicy`; the public record-create request cannot supply a policy context or self-assert consent. A notification intent must include its requested `purpose`, and absent consent, revoked consent, disabled channels, suppressed recipients, or unavailable policy storage fail closed.
+The `002_notification_policy_records.sql` migration adds tenant-scoped consent, channel-preference, and recipient-suppression records. `Persistence.PolicyStore` reads authoritative PostgreSQL rows and applies `Domain.DispatchPolicy`; the public record-create request cannot supply a policy context or self-assert consent. A notification intent must include its requested `purpose`, and absent consent, revoked consent, disabled channels, suppressed recipients, or unavailable policy storage fail closed.
 
 Trusted internal adapters may update policy records through `PolicyStore.record_consent/6`, `set_preference/5`, `suppress/4`, and `unsuppress/3`. These mutation functions are not exposed as public routes. Each policy mutation writes a notification-service outbox event in the same database transaction.
 
-This gate is enforced before a notification record is queued. The final enqueue transaction rechecks policy under a tenant/recipient advisory lock shared with consent, preference, and suppression mutations, preventing a revocation from racing past the enqueue-time decision. Provider dispatch adapters are not yet part of this service implementation; when they are added, they must re-check current consent and suppression immediately before sending. Do not claim provider delivery or send-time enforcement until that worker and its concurrency tests are implemented.
+The queue-time gate rechecks policy in the final enqueue transaction under a tenant/recipient advisory lock shared with consent, preference, and suppression mutations. `DispatchGate.dispatch/3` is the required last-mile seam for any provider adapter: it reads current persisted policy immediately before invoking the adapter and never invokes the sender when policy denies or cannot be checked. Its unit and PostgreSQL integration tests cover denied sends, sender invocation ordering, provider errors, revocation and tenant isolation.
+
+**Integration status:** no provider-delivery worker or provider adapters are wired into this service yet. Until those adapters call `DispatchGate.dispatch/3` immediately before each external send, do not claim end-to-end send-time enforcement or actual provider delivery. A policy check and an external provider side effect cannot be made one atomic database transaction; the adapter must minimize the interval between the check and send and must not bypass the gate.
