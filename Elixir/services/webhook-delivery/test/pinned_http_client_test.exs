@@ -46,4 +46,40 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClientTest do
     assert :more = PinnedHttpClient.parse_status_response("HTTP/1.1 204 No Content")
     assert :more = PinnedHttpClient.parse_status_response("HTTP/1.1 204 No Content\n")
   end
+  
+  test "rejects reserved transport headers" do
+    target = %{
+      host: "hooks.example.test",
+      port: 443,
+      address: {93, 184, 216, 34},
+      request_target: "/callback"
+    }
+
+    assert {:error, :invalid_request} =
+             PinnedHttpClient.post(target, [{"Host", "attacker.example"}], "{}")
+
+    assert {:error, :invalid_request} =
+             PinnedHttpClient.post(target, [{"Content-Length", "999"}], "{}")
+  end
+
+  test "rejects oversized bodies before opening a socket" do
+    target = %{
+      host: "hooks.example.test",
+      port: 443,
+      address: {93, 184, 216, 34},
+      request_target: "/callback"
+    }
+
+    assert {:error, :invalid_request} =
+             PinnedHttpClient.post(target, [], :binary.copy("x", 1_048_577))
+  end
+
+  test "rejects malformed target metadata before opening a socket" do
+    assert {:error, :invalid_request} =
+             PinnedHttpClient.post(
+               %{host: "hooks.example.test", port: 443, address: {127, 0, 0, 1}, request_target: "/\r\nHost: localhost"},
+               [],
+               "{}"
+             )
+  end
 end
