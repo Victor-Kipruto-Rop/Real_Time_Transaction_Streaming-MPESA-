@@ -13,7 +13,10 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   def children do
-    if is_binary(System.get_env("DATABASE_URL")) and System.get_env("DATABASE_URL") != "" do
+    enabled? = System.get_env("WEBHOOK_DELIVERY_WORKER_ENABLED") == "true"
+    database? = is_binary(System.get_env("DATABASE_URL")) and System.get_env("DATABASE_URL") != ""
+
+    if enabled? and database? do
       [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
     else
       []
@@ -39,40 +42,72 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
   defp dispatch(delivery) do
     with {:ok, secret} <- SecretBox.decrypt(delivery.encrypted_secret),
-         {:ok, request} <- DeliveryRequest.build(
-           %{"id" => delivery.subscription_id, "target_url" => delivery.target_url, "secret" => secret},
-           delivery.event,
-           System.system_time(:second)
-         ),
-         result <- post(request) do
-      case result do
+         {:ok, request} <-
+           DeliveryRequest.build(
+             %{
+               "id" => delivery.subscription_id,
+               "target_url" => delivery.target_url,
+               "secret" => secret
+             },
+             delivery.event,
+             System.system_time(:second)
+           ) do
+      case post(request) do
         {:ok, status} when status >= 200 and status < 300 ->
           CustomerDeliveryStore.complete_delivery(delivery.tenant_id, delivery.delivery_id, status)
+
         {:ok, status} ->
-          CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, "http_#{status}", status)
+          CustomerDeliveryStore.fail_delivery(
+            delivery.tenant_id, delivery.delivery_id, delivery.attempts, "http_#{status}", status
+          )
+
         {:error, reason} ->
-          CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, reason)
+          CustomerDeliveryStore.fail_delivery(
+            delivery.tenant_id, delivery.delivery_id, delivery.attempts, reason
+          )
       end
     else
       {:error, :decryption_failed} ->
-        CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, "secret_decryption_failed", 400)
+        CustomerDeliveryStore.fail_delivery(
+          delivery.tenant_id, delivery.delivery_id, delivery.attempts, "secret_decryption_failed", 400
+        )
+
       {:error, reason} ->
-        CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, safe_reason(reason), 400)
+        CustomerDeliveryStore.fail_delivery(
+          delivery.tenant_id, delivery.delivery_id, delivery.attempts, safe_reason(reason), 400
+        )
     end
   rescue
-    _ -> CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, "dispatch_failed")
+    _ ->
+      CustomerDeliveryStore.fail_delivery(
+        delivery.tenant_id, delivery.delivery_id, delivery.attempts, "dispatch_failed"
+      )
   catch
-    :exit, _ -> CustomerDeliveryStore.fail_delivery(delivery.tenant_id, delivery.delivery_id, delivery.attempts, "dispatch_failed")
+    :exit, _ ->
+      CustomerDeliveryStore.fail_delivery(
+        delivery.tenant_id, delivery.delivery_id, delivery.attempts, "dispatch_failed"
+      )
   end
 
   defp post(request) do
-    headers = Enum.map(request.headers, fn {name, value} -> {String.to_charlist(name), String.to_charlist(value)} end)
+    headers =
+      request.headers
+      |> Enum.reject(fn {name, _value} -> name == "content-type" end)
+      |> Enum.map(fn {name, value} -> {String.to_charlist(name), String.to_charlist(value)} end)
+
     http_request = {String.to_charlist(request.url), headers, ~c"application/json", request.body}
 
-    case :httpc.request(:post, http_request,
-           [timeout: 5_000, connect_timeout: 2_000, autoredirect: false,
-            ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]],
-           body_format: :binary) do
+    case :httpc.request(
+           :post,
+           http_request,
+           [
+             timeout: 5_000,
+             connect_timeout: 2_000,
+             autoredirect: false,
+             ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
+           ],
+           body_format: :binary
+         ) do
       {:ok, {{_version, status, _reason}, _headers, _body}} -> {:ok, status}
       {:error, :timeout} -> {:error, "timeout"}
       {:error, _} -> {:error, "connection_error"}
