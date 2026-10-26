@@ -97,7 +97,7 @@ if System.get_env("DATABASE_URL") do
                  [tenant, failed_delivery.delivery_id]
                )
 
-      assert {:ok, %{rows: [[1, "dead_lettered", nil, "permanent_test_failure"]]}} =
+      assert {:ok, %{rows: [[1, "permanent_failure", nil, "permanent_test_failure"]]}} =
                Postgrex.query(
                  PesaGuard.WebhookDelivery.Persistence.PostgresConnection,
                  """
