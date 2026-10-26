@@ -122,6 +122,25 @@ defmodule PesaGuard.WebhookDelivery.CustomerWebhooksController do
     conn |> put_status(:bad_request) |> json(%{error: "subscription_id_required"})
   end
 
+  def fanout(conn, params) do
+    tenant_id = conn.assigns.tenant_context.tenant_id
+    event_id = Map.get(params, "event_id")
+    event_type = Map.get(params, "event_type")
+    payload = Map.get(params, "payload")
+
+    if is_binary(event_id) and byte_size(event_id) in 1..200 and
+         is_binary(event_type) and byte_size(event_type) in 1..160 and is_map(payload) do
+      case CustomerWebhookStore.enqueue_for_event(tenant_id, event_id, event_type, payload) do
+        {:ok, deliveries} ->
+          conn |> put_status(:accepted) |> json(%{data: %{event_id: event_id, queued_count: length(deliveries)}})
+        {:error, _} ->
+          conn |> put_status(:service_unavailable) |> json(%{error: "event_fanout_unavailable"})
+      end
+    else
+      conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_event"})
+    end
+  end
+
   def history(conn, %{"subscription_id" => subscription_id}) do
     tenant_id = conn.assigns.tenant_context.tenant_id
 
