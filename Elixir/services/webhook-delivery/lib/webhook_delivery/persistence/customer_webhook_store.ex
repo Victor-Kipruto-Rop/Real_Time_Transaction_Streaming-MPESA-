@@ -118,15 +118,19 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
 
         {:ok, %{rows: []}} ->
           duplicate_sql = """
-          SELECT delivery_id, status, attempts, payload::text, created_at
+          SELECT delivery_id, status, attempts, payload::text, created_at, event_type
           FROM telixo_customer_webhook_deliveries
           WHERE tenant_id = $1 AND subscription_id = $2 AND event_id = $3
           """
 
           case Postgrex.query(@connection, duplicate_sql, [tenant_id, subscription_id, event_id]) do
             {:ok, %{rows: [row]}} ->
-              existing = decode_delivery(row)
-              if existing.payload == payload, do: {:ok, existing, :duplicate}, else: {:error, :event_conflict}
+              existing = decode_delivery(Enum.take(row, 5))
+              existing_type = Enum.at(row, 5)
+
+              if existing.payload == payload and existing_type == event_type,
+                do: {:ok, existing, :duplicate},
+                else: {:error, :event_conflict}
 
             _ ->
               {:error, :unavailable}
@@ -145,6 +149,26 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
   end
 
   def enqueue(_, _, _, _, _), do: {:error, :invalid_delivery}
+
+  def list_deliveries(tenant_id, subscription_id, limit \\ 100)
+      when is_binary(tenant_id) and is_binary(subscription_id) and
+             is_integer(limit) and limit > 0 and limit <= 200 do
+    sql = """
+    SELECT delivery_id, event_id, event_type, status, attempts, last_http_status,
+           last_error, created_at, updated_at, delivered_at
+    FROM telixo_customer_webhook_deliveries
+    WHERE tenant_id = $1 AND subscription_id = $2
+    ORDER BY created_at DESC
+    LIMIT $3
+    """
+
+    case Postgrex.query(@connection, sql, [tenant_id, subscription_id, limit]) do
+      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &decode_history/1)}
+      {:error, _} -> {:error, :unavailable}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
 
   def claim(limit \\ 20) when is_integer(limit) and limit > 0 and limit <= 100 do
     sql = """
@@ -290,6 +314,15 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
       subscription_id: id, tenant_id: tenant_id, target_url: target_url,
       event_types: Jason.decode!(event_types), active: active,
       created_at: DateTime.to_iso8601(created_at)
+    }
+  end
+
+  defp decode_history([id, event_id, event_type, status, attempts, http_status, last_error, created, updated, delivered]) do
+    %{
+      delivery_id: id, event_id: event_id, event_type: event_type, status: status,
+      attempts: attempts, last_http_status: http_status, last_error: last_error,
+      created_at: DateTime.to_iso8601(created), updated_at: DateTime.to_iso8601(updated),
+      delivered_at: if(delivered, do: DateTime.to_iso8601(delivered), else: nil)
     }
   end
 
