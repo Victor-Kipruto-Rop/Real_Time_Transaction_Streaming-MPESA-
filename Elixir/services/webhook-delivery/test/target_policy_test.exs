@@ -13,6 +13,13 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicyTest do
     assert {:error, :target_url_host_required} = TargetPolicy.validate("https:///hook")
   end
 
+  test "rejects special-use IPv6 destinations" do
+    resolver = fn _host -> {:ok, [{0x2001, 0x0DB8, 0, 0, 0, 0, 0, 1}]} end
+
+    assert {:error, :target_url_private_host_forbidden} =
+             TargetPolicy.resolve_target("https://hooks.example.test/callback", resolver)
+  end
+
   test "pins the exact validated public address and preserves the HTTPS request target" do
     resolver = fn "hooks.example.test" -> {:ok, [{93, 184, 216, 34}]} end
 
