@@ -9,10 +9,13 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
   @connect_timeout_ms 2_000
   @request_timeout_ms 5_000
   @max_status_line_bytes 8_192
+  @max_body_bytes 1_048_576
 
   def post(target, headers, body)
       when is_map(target) and is_list(headers) and is_binary(body) do
-    with true <- valid_headers?(headers),
+    with :ok <- validate_target(target),
+         true <- byte_size(body) <= @max_body_bytes,
+         true <- valid_headers?(headers),
          {:ok, tcp_socket} <- connect_tcp(target.address, target.port) do
       request_over_tls(tcp_socket, target, headers, body)
     else
@@ -26,6 +29,35 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
   end
 
   def post(_, _, _), do: {:error, :invalid_request}
+
+  defp validate_target(%{
+         host: host,
+         port: port,
+         address: address,
+         request_target: request_target
+       })
+       when is_binary(host) and byte_size(host) in 1..253 and
+              is_integer(port) and port in 1..65_535 and
+              is_tuple(address) and is_binary(request_target) do
+    cond do
+      String.contains?(host, ["\r", "\n", "/", "@", " "]) ->
+        {:error, :invalid_request}
+
+      not String.starts_with?(request_target, "/") ->
+        {:error, :invalid_request}
+
+      String.contains?(request_target, ["\r", "\n", " "]) ->
+        {:error, :invalid_request}
+
+      tuple_size(address) not in [4, 8] ->
+        {:error, :invalid_request}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_target(_), do: {:error, :invalid_request}
 
   defp connect_tcp(address, port) do
     family = if tuple_size(address) == 8, do: [:inet6], else: []
@@ -112,11 +144,11 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
 
   defp read_status_line_until(socket, buffer, deadline)
        when byte_size(buffer) <= @max_status_line_bytes do
-    case :binary.match(buffer, "\\r\\n") do
+    case :binary.match(buffer, "\r\n") do
       {index, 2} ->
         status_line = binary_part(buffer, 0, index)
 
-        case Regex.run(~r/^HTTP\\/\\d(?:\\.\\d)?\\s+(\\d{3})(?:\\s|$)/, status_line) do
+        case Regex.run(~r/^HTTP\/\d(?:\.\d)?\s+(\d{3})(?:\s|$)/, status_line) do
           [_, status] -> {:ok, String.to_integer(status)}
           _ -> {:error, :invalid_http_response}
         end
@@ -144,10 +176,14 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
   defp read_status_line_until(_socket, _buffer, _deadline), do: {:error, :http_status_line_too_large}
 
   defp valid_headers?(headers) do
+    reserved = ~w(host content-length transfer-encoding connection proxy-connection upgrade)
+
     Enum.all?(headers, fn
       {name, value} when is_binary(name) and is_binary(value) ->
-        not String.contains?(name, ["\r", "\n", ":"]) and
-          not String.contains?(value, ["\r", "\n"])
+        String.match?(name, ~r/^[A-Za-z0-9!#$%&'*+.^_~-]+$/) and
+          String.downcase(name) not in reserved and
+          not String.contains?(value, ["\r", "\n"]) and
+          byte_size(value) <= 8_192
 
       _ ->
         false
