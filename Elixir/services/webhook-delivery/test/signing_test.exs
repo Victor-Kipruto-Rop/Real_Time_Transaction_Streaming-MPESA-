@@ -18,7 +18,7 @@ defmodule PesaGuard.WebhookDelivery.SigningTest do
     timestamp = 1_800_000_000
     assert {:ok, signature} = Signing.sign(@secret, timestamp, @body)
 
-    assert {:error, :timestamp_outside_tolerance} =
+    assert {:error, :invalid_signature} =
              Signing.verify(@secret, Integer.to_string(timestamp), signature, @body <> " ", timestamp)
   end
 
