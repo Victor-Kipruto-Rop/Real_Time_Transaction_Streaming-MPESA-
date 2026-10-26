@@ -1,4 +1,8 @@
-# Reconciliation Engine
+# Reconciliation Engine Service
+
+**Priority:** Critical
+
+**Design responsibility:** Match normalized provider transactions against the authorized ledger interface and classify discrepancies with explainable evidence.
 
 **Role:** match normalized provider transaction records against the authoritative ledger interface and classify discrepancies.
 
