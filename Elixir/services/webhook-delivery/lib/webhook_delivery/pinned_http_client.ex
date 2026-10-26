@@ -122,7 +122,7 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
 
   defp read_status_line_until(socket, buffer, deadline)
        when byte_size(buffer) <= @max_status_line_bytes do
-    case :binary.match(buffer, "\\r\\n") do
+    case :binary.match(buffer, "\r\n") do
       {index, 2} ->
         status_line = binary_part(buffer, 0, index)
 
