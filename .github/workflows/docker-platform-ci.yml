@@ -47,12 +47,6 @@ jobs:
       - name: Validate Java platform
         run: docker compose -f Java/compose.yaml config > /dev/null
       - name: Validate Elixir platform
-        env:
-          ELIXIR_POSTGRES_PASSWORD: ci-only-url-safe-password
-          SECRET_KEY_BASE: ci-only-secret-key-base-for-compose-validation-not-runtime
-          JWT_SECRET: ci-only-jwt-signing-secret-at-least-thirty-two-bytes
-          EVENT_RELAY_URL: https://relay.invalid/events
-          EVENT_RELAY_TOKEN: ci-only-event-relay-token-at-least-thirty-two-bytes
         run: docker compose -f Elixir/compose.yaml config > /dev/null
       - name: Validate Go platform
         run: docker compose -f Go/compose.yaml config > /dev/null
