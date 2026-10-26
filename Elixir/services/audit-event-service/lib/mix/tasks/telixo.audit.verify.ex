@@ -82,11 +82,14 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
           if status == "failed", do: [{tenant_id, failure_id, failure_code} | acc], else: acc
         end)
 
+      archive_failures = verify_archives(reader, writer, verifier_identity)
+      failures = failures ++ archive_failures
+
       if failures != [] do
-        Mix.raise("Audit integrity verification failed for #{length(failures)} tenant(s): #{inspect(Enum.reverse(failures))}")
+        Mix.raise("Audit integrity verification failed for #{length(failures)} check(s): #{inspect(Enum.reverse(failures))}")
       end
 
-      Mix.shell().info("Audit integrity verification passed for #{length(tenants)} tenant(s).")
+      Mix.shell().info("Audit integrity verification passed for #{length(tenants)} tenant(s) and all archived segments.")
     after
       GenServer.stop(reader)
       GenServer.stop(writer)
@@ -106,6 +109,46 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
     else
       _ -> {:error, event_id, "hash_chain_mismatch", count, expected_sequence - 1, expected_previous_hash}
     end
+  end
+
+  defp verify_archives(reader, writer, verifier_identity) do
+    archives =
+      Postgrex.query!(
+        reader,
+        "SELECT tenant_id, archive_uri, archive_sha256 FROM telixo_audit_retention_archives ORDER BY created_at",
+        []
+      ).rows
+
+    Enum.reduce(archives, [], fn [tenant_id, archive_uri, expected_hash], failures ->
+      result =
+        with {:ok, bytes} <- File.read(archive_uri),
+             actual_hash <- :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower),
+             true <- Plug.Crypto.secure_compare(expected_hash, actual_hash) do
+          :ok
+        else
+          {:error, _} -> {:error, "archive_missing"}
+          false -> {:error, "archive_hash_mismatch"}
+        end
+
+      case result do
+        :ok ->
+          failures
+
+        {:error, code} ->
+          verification_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+          now = DateTime.utc_now()
+
+          Postgrex.query!(writer, """
+          INSERT INTO telixo_audit_integrity_verification_runs
+            (verification_id, tenant_id, verifier_identity, status, verified_event_count,
+             last_verified_sequence, last_verified_hash, failure_event_id, failure_code,
+             started_at, completed_at)
+          VALUES ($1, $2, $3, 'failed', 0, NULL, $4, NULL, $5, $6, now())
+          """, [verification_id, tenant_id, verifier_identity, expected_hash, code, now])
+
+          [{tenant_id, archive_uri, code} | failures]
+      end
+    end)
   end
 
   defp calculate_hash(tenant_id, idempotency_key, sequence, event, previous_hash) do
