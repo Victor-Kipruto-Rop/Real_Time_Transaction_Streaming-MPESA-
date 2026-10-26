@@ -68,6 +68,15 @@ if System.get_env("DATABASE_URL") do
                CustomerWebhookStore.enqueue(tenant, subscription.subscription_id, event_id,
                  "risk.flagged", payload)
 
+      assert {:error, :payload_too_large} =
+               CustomerWebhookStore.enqueue(
+                 tenant,
+                 subscription.subscription_id,
+                 "oversized-" <> Base.encode16(:crypto.strong_rand_bytes(8)),
+                 "reconciliation.completed",
+                 %{"data" => String.duplicate("x", 1_100_000)}
+               )
+
       assert {:ok, claimed} = CustomerWebhookStore.claim(100)
       item = Enum.find(claimed, &(&1.delivery_id == delivery.delivery_id))
       assert item
