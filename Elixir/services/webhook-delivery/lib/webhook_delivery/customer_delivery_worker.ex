@@ -9,6 +9,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   alias PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore
   alias PesaGuard.WebhookDelivery.Signing
   alias PesaGuard.WebhookDelivery.TargetPolicy
+  alias PesaGuard.WebhookDelivery.EndpointCircuitBreaker
 
   @poll_interval_ms 1_000
   @batch_size 5
@@ -31,7 +32,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
     cond do
       is_binary(database_url) and database_url != "" and key_valid? ->
-        [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
+        [EndpointCircuitBreaker, Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
 
       environment == :prod ->
         raise "DATABASE_URL and a base64-encoded 32-byte WEBHOOK_SECRET_ENCRYPTION_KEY are required in production"
@@ -70,6 +71,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
     result =
       with :ok <- TargetPolicy.validate(delivery.target_url),
+           :ok <- EndpointCircuitBreaker.allow?(delivery.target_url),
            {:ok, headers} <- Signing.headers(delivery.delivery_id, delivery.secret, body, timestamp) do
         request_headers =
           headers
@@ -99,14 +101,22 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
     case result do
       {:ok, {{_version, status, _reason}, _headers, _response}} when status >= 200 and status < 300 ->
+        EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.acknowledge(delivery.tenant_id, delivery.delivery_id, status)
 
       {:ok, {{_version, status, _reason}, _headers, _response}}
       when status in [408, 425, 429] or status >= 500 ->
+        EndpointCircuitBreaker.record_failure(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}")
 
       {:ok, {{_version, status, _reason}, _headers, _response}} ->
+        # A permanent 4xx response proves the endpoint is reachable; do not
+        # open the circuit for an application-level rejection.
+        EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}", true)
+
+      {:error, :circuit_open} ->
+        CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "circuit_open")
 
       {:error, reason}
       when reason in [
@@ -121,6 +131,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason), true)
 
       {:error, reason} ->
+        EndpointCircuitBreaker.record_failure(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason))
     end
   end
