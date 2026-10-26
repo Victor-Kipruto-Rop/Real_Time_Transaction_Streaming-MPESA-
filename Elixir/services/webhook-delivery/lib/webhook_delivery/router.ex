@@ -27,6 +27,7 @@ defmodule PesaGuard.WebhookDelivery.Router do
     get "/subscriptions", CustomerWebhooksController, :index
     post "/subscriptions", CustomerWebhooksController, :create
     post "/subscriptions/:subscription_id/deliveries", CustomerWebhooksController, :enqueue
+    get "/subscriptions/:subscription_id/deliveries/:delivery_id/attempts", CustomerWebhooksController, :attempts
     get "/subscriptions/:subscription_id/deliveries", CustomerWebhooksController, :history
   end
 end
