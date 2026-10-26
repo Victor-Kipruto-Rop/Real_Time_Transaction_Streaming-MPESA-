@@ -61,30 +61,6 @@ defmodule PesaGuard.WebhookDelivery.CustomerWebhooksController do
     end
   end
 
-  def fanout(conn, %{"event_id" => event_id, "event_type" => event_type, "payload" => payload})
-      when is_binary(event_id) and byte_size(event_id) in 1..200 and
-             is_binary(event_type) and byte_size(event_type) in 1..160 and is_map(payload) do
-    tenant_id = conn.assigns.tenant_context.tenant_id
-
-    case CustomerWebhookStore.enqueue_for_event(tenant_id, event_id, event_type, payload) do
-      {:ok, deliveries} ->
-        conn |> put_status(:accepted) |> json(%{data: deliveries, accepted: length(deliveries)})
-
-      {:error, {:fanout_incomplete, _reason}} ->
-        conn |> put_status(:service_unavailable) |> json(%{error: "event_fanout_incomplete", retryable: true})
-
-      {:error, :unavailable} ->
-        conn |> put_status(:service_unavailable) |> json(%{error: "delivery_queue_unavailable"})
-
-      {:error, _} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_event"})
-    end
-  end
-
-  def fanout(conn, _params) do
-    conn |> put_status(:bad_request) |> json(%{error: "event_id_event_type_and_object_payload_required"})
-  end
-
   def enqueue(conn, %{"subscription_id" => subscription_id} = params) do
     tenant_id = conn.assigns.tenant_context.tenant_id
 
@@ -145,13 +121,20 @@ defmodule PesaGuard.WebhookDelivery.CustomerWebhooksController do
     end
   end
 
-  def history(conn, %{"subscription_id" => subscription_id}) do
+  def attempts(conn, %{"subscription_id" => subscription_id, "delivery_id" => delivery_id}) do
     tenant_id = conn.assigns.tenant_context.tenant_id
 
-    case CustomerWebhookStore.list_deliveries(tenant_id, subscription_id) do
-      {:ok, deliveries} -> json(conn, %{data: deliveries})
-      {:error, _} -> conn |> put_status(:service_unavailable) |> json(%{error: "delivery_history_unavailable"})
+    case CustomerWebhookStore.list_attempts(tenant_id, subscription_id, delivery_id) do
+      {:ok, attempts} -> json(conn, %{data: attempts})
+      {:error, :invalid_attempt_query} ->
+        conn |> put_status(:bad_request) |> json(%{error: "invalid_attempt_query"})
+      {:error, _} ->
+        conn |> put_status(:service_unavailable) |> json(%{error: "delivery_attempt_history_unavailable"})
     end
+  end
+
+  def attempts(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "subscription_id_and_delivery_id_required"})
   end
 
   def history(conn, %{"subscription_id" => subscription_id}) do
