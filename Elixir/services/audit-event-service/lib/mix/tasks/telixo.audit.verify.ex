@@ -23,20 +23,44 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
     {:ok, writer} = Postgrex.start_link(url: writer_url, pool_size: 1)
 
     try do
-      tenants = Postgrex.query!(reader, "SELECT DISTINCT tenant_id FROM telixo_audit_events ORDER BY tenant_id", []).rows
+      tenants =
+        Postgrex.query!(
+          reader,
+          """
+          SELECT tenant_id FROM telixo_audit_events
+          UNION
+          SELECT tenant_id FROM telixo_audit_chain_anchors
+          ORDER BY tenant_id
+          """,
+          []
+        ).rows
 
       failures =
         Enum.reduce(tenants, [], fn [tenant_id], acc ->
           started_at = DateTime.utc_now()
-          rows =
-            Postgrex.query!(reader, """
-            SELECT event_id, tenant_sequence, idempotency_key, event_payload::text, previous_hash, event_hash
-            FROM telixo_audit_events
-            WHERE tenant_id = $1
-            ORDER BY tenant_sequence ASC
-            """, [tenant_id]).rows
+          {first_sequence, previous_hash} =
+            case Postgrex.query!(
+                   reader,
+                   "SELECT first_retained_sequence, previous_hash FROM telixo_audit_chain_anchors WHERE tenant_id = $1",
+                   [tenant_id]
+                 ).rows do
+              [[sequence, hash]] -> {sequence, hash}
+              [] -> {1, nil}
+            end
 
-          result = verify_rows(rows, tenant_id, 1, nil, 0, nil)
+          rows =
+            Postgrex.query!(
+              reader,
+              """
+              SELECT event_id, tenant_sequence, idempotency_key, event_payload::text, previous_hash, event_hash
+              FROM telixo_audit_events
+              WHERE tenant_id = $1 AND tenant_sequence >= $2
+              ORDER BY tenant_sequence ASC
+              """,
+              [tenant_id, first_sequence]
+            ).rows
+
+          result = verify_rows(rows, tenant_id, first_sequence, previous_hash, 0, previous_hash)
 
           {status, count, last_sequence, last_hash, failure_id, failure_code} =
             case result do
@@ -69,8 +93,8 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
     end
   end
 
-  defp verify_rows([], _tenant_id, _expected_sequence, _previous_hash, count, last_hash),
-    do: {:ok, count, count, last_hash}
+  defp verify_rows([], _tenant_id, expected_sequence, previous_hash, count, last_hash),
+    do: {:ok, count, expected_sequence - 1, last_hash || previous_hash}
 
   defp verify_rows([[event_id, sequence, idempotency_key, payload_text, previous_hash, stored_hash] | rest],
          tenant_id, expected_sequence, expected_previous_hash, count, _last_hash) do
