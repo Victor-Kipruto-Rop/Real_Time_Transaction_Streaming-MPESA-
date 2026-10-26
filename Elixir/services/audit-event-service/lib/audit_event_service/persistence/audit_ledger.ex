@@ -133,6 +133,26 @@ defmodule PesaGuard.AuditEventService.Persistence.AuditLedger do
           updated_at = now()
     """, [tenant_id, event_id, digest, sequence])
 
+    outbox_event = %{
+      "event_id" => event_id,
+      "tenant_id" => tenant_id,
+      "event_type" => "audit-event-service.audit_event_appended",
+      "occurred_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "schema_version" => 1,
+      "payload" => %{
+        "event_id" => event_id,
+        "tenant_sequence" => sequence,
+        "event_hash" => digest,
+        "previous_hash" => previous_hash,
+        "data" => event
+      }
+    }
+
+    Postgrex.query!(conn, """
+    INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload)
+    VALUES ($1, 'audit-event-service', $2, $3, $4::text::jsonb)
+    """, [event_id, tenant_id, outbox_event["event_type"], Jason.encode!(outbox_event)])
+
     {:ok, decode_event(row), :created}
   end
 
