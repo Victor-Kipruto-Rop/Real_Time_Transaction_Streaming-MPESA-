@@ -116,7 +116,6 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
              :target_url_port_forbidden,
              :target_url_private_host_forbidden,
              :target_url_ip_literal_forbidden,
-             :target_url_dns_resolution_failed,
              :invalid_secret
            ] ->
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason), true)
