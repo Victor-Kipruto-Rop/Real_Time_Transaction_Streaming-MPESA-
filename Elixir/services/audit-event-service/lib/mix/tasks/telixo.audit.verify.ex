@@ -130,23 +130,26 @@ defmodule Mix.Tasks.Telixo.Audit.Verify do
           false -> {:error, "archive_hash_mismatch"}
         end
 
+      verification_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+      now = DateTime.utc_now()
+
+      {status, actual_hash, failure_code} =
+        case result do
+          :ok -> {"verified", expected_hash, nil}
+          {:error, code} -> {"failed", expected_hash, code}
+        end
+
+      Postgrex.query!(writer, """
+      INSERT INTO telixo_audit_integrity_verification_runs
+        (verification_id, tenant_id, verifier_identity, status, verified_event_count,
+         last_verified_sequence, last_verified_hash, failure_event_id, failure_code,
+         started_at, completed_at)
+      VALUES ($1, $2, $3, $4, 0, NULL, $5, NULL, $6, $7, now())
+      """, [verification_id, tenant_id, verifier_identity, status, actual_hash, failure_code, now])
+
       case result do
-        :ok ->
-          failures
-
-        {:error, code} ->
-          verification_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
-          now = DateTime.utc_now()
-
-          Postgrex.query!(writer, """
-          INSERT INTO telixo_audit_integrity_verification_runs
-            (verification_id, tenant_id, verifier_identity, status, verified_event_count,
-             last_verified_sequence, last_verified_hash, failure_event_id, failure_code,
-             started_at, completed_at)
-          VALUES ($1, $2, $3, 'failed', 0, NULL, $4, NULL, $5, $6, now())
-          """, [verification_id, tenant_id, verifier_identity, expected_hash, code, now])
-
-          [{tenant_id, archive_uri, code} | failures]
+        :ok -> failures
+        {:error, code} -> [{tenant_id, archive_uri, code} | failures]
       end
     end)
   end
