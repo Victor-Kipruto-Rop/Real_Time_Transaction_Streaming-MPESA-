@@ -4,7 +4,7 @@ defmodule PesaGuard.WebhookDelivery.MixProject do
   def project do
     [
       app: :webhook_delivery,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -14,7 +14,7 @@ defmodule PesaGuard.WebhookDelivery.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :runtime_tools],
+      extra_applications: [:logger, :runtime_tools, :crypto],
       mod: {PesaGuard.WebhookDelivery.Application, []}
     ]
   end
@@ -26,13 +26,12 @@ defmodule PesaGuard.WebhookDelivery.MixProject do
       {:jason, "~> 1.4"},
       {:telemetry_metrics, "~> 1.1"},
       {:telemetry_poller, "~> 1.2"},
-      {:plug, "~> 1.16"}
+      {:plug, "~> 1.16"},
+      {:postgrex, "~> 0.19"}
     ]
   end
 
   defp aliases do
-    [
-      check: ["format --check-formatted", "compile --warnings-as-errors", "test"]
-    ]
+    [check: ["format --check-formatted", "compile --warnings-as-errors", "test"]]
   end
 end

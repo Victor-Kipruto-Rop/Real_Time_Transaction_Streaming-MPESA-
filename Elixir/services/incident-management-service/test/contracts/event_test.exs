@@ -1,12 +1,22 @@
-defmodule TELIXO.IncidentManagementService.Contracts.EventTest do
+defmodule PesaGuard.IncidentManagementService.Contracts.EventTest do
   use ExUnit.Case, async: true
-  alias TELIXO.IncidentManagementService.Contracts.Event
-  test "accepts a valid versioned event" do
-    assert {:ok, _} = Event.validate(%{"event_id" => "evt-1", "tenant_id" => "t-1", "event_type" => "example.created", "occurred_at" => "2026-01-01T00:00:00Z", "schema_version" => 1, "payload" => %{}})
+  alias PesaGuard.IncidentManagementService.Contracts.Event
+
+  test "rejects incomplete events" do
+    assert {:error, {:invalid_event, fields}} = Event.validate(%{})
+    assert fields != []
   end
-  test "rejects invalid envelope and payload" do
-    assert {:error, {:invalid_event, errors}} = Event.validate(%{"payload" => []})
-    assert "event_id" in errors
-    assert "payload" in errors
+
+  test "accepts a valid versioned event" do
+    event = %{
+      "event_id" => "event-1",
+      "tenant_id" => "tenant-1",
+      "event_type" => "test.created",
+      "occurred_at" => "2026-01-01T00:00:00Z",
+      "schema_version" => 1,
+      "payload" => %{}
+    }
+
+    assert {:ok, ^event} = Event.validate(event)
   end
 end

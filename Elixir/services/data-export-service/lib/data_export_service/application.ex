@@ -1,19 +1,17 @@
 defmodule PesaGuard.DataExportService.Application do
-  @moduledoc """
-  OTP application for Data Export Service.
-
-  Authorized asynchronous report/export jobs, scoped artifact access, expiry and audit trail.
-  """
-
+  @moduledoc "OTP application for data-export-service."
   use Application
 
   @impl true
   def start(_type, _args) do
-    children = [
-      PesaGuard.DataExportService.Endpoint,
-      {PesaGuard.DataExportService.Telemetry, []}
-    ]
+    children =
+      [{PesaGuard.DataExportService.Telemetry, []}] ++
+        PesaGuard.DataExportService.Persistence.PostgresStore.children() ++
+        [PesaGuard.DataExportService.Endpoint]
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: PesaGuard.DataExportService.Supervisor)
+    Supervisor.start_link(children,
+      strategy: :one_for_one,
+      name: PesaGuard.DataExportService.Supervisor
+    )
   end
 end

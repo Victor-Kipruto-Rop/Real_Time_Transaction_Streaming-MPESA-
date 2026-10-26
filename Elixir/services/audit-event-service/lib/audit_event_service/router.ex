@@ -6,9 +6,20 @@ defmodule PesaGuard.AuditEventService.Router do
     plug PesaGuard.AuditEventService.SecurityHeaders
   end
 
+  pipeline :authenticated_api do
+    plug PesaGuard.AuditEventService.Security.JWTAuth
+  end
+
   scope "/", PesaGuard.AuditEventService do
     pipe_through :api
     get "/health", HealthController, :show
     get "/ready", HealthController, :ready
+  end
+
+  scope "/v1", PesaGuard.AuditEventService do
+    pipe_through [:api, :authenticated_api]
+    post "/records", RecordsController, :create
+    get "/records/:id", RecordsController, :show
+    patch "/records/:id/state", RecordsController, :transition
   end
 end
