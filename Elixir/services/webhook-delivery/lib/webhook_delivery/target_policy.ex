@@ -12,7 +12,9 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
   def validate(url) when is_binary(url) do
     with {:ok, _} <- Processor.prepare(%{"target_url" => url, "payload" => %{}}),
          %URI{host: host} <- URI.parse(url),
-         {:ok, addresses} <- resolve(host),
+         normalized_host <- String.trim(host, "[]"),
+         false <- ip_literal?(normalized_host),
+         {:ok, addresses} <- resolve(normalized_host),
          true <- addresses != [] and Enum.all?(addresses, &public_address?/1) do
       :ok
     else
@@ -25,6 +27,17 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
   end
 
   def validate(_), do: {:error, :target_url_required}
+
+  defp ip_literal?(host) do
+    case :inet.parse_address(String.to_charlist(host)) do
+      {:ok, _address} -> true
+      {:error, _} ->
+        case :inet.parse_ipv6_address(String.to_charlist(host)) do
+          {:ok, _address} -> true
+          {:error, _} -> false
+        end
+    end
+  end
 
   defp resolve(host) do
     v4 = case :inet.getaddrs(String.to_charlist(host), :inet) do
