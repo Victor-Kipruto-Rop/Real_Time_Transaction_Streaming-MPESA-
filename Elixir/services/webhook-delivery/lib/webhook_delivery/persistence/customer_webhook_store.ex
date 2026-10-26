@@ -170,6 +170,36 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
     _ -> {:error, :unavailable}
   end
 
+  def enqueue_for_event(tenant_id, event_id, event_type, payload)
+      when is_binary(tenant_id) and is_binary(event_id) and is_binary(event_type) and is_map(payload) do
+    sql = """
+    SELECT subscription_id
+    FROM telixo_webhook_subscriptions
+    WHERE tenant_id = $1 AND active = TRUE AND event_types ? $2
+    ORDER BY subscription_id
+    """
+
+    with {:ok, %{rows: rows}} <- Postgrex.query(@connection, sql, [tenant_id, event_type]) do
+      rows
+      |> Enum.reduce_while({:ok, []}, fn [subscription_id], {:ok, acc} ->
+        case enqueue(tenant_id, subscription_id, event_id, event_type, payload) do
+          {:ok, delivery, _result} -> {:cont, {:ok, [delivery | acc]}}
+          {:error, reason} -> {:halt, {:error, {:fanout_incomplete, reason}}}
+        end
+      end)
+      |> case do
+        {:ok, deliveries} -> {:ok, Enum.reverse(deliveries)}
+        error -> error
+      end
+    else
+      {:error, _} -> {:error, :unavailable}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  def enqueue_for_event(_, _, _, _), do: {:error, :invalid_event}
+
   def claim(limit \\ 20) when is_integer(limit) and limit > 0 and limit <= 100 do
     sql = """
     WITH candidates AS (
