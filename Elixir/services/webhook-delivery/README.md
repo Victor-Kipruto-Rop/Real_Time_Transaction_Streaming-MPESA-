@@ -6,6 +6,20 @@
 
 Standalone Phoenix application with an OTP supervision tree, JSON health/readiness routes, runtime configuration and telemetry hooks.
 
+## HMAC delivery signing foundation
+
+`PesaGuard.WebhookDelivery.Signing` generates versioned HMAC-SHA256 signatures over
+`timestamp <> "." <> exact_request_body_bytes`. It emits `x-telixo-delivery-id`,
+`x-telixo-timestamp`, and `x-telixo-signature: v1=<lowercase-hex>` headers.
+Secrets shorter than 32 bytes are rejected. Receivers should verify the signature
+against the raw body before JSON parsing and enforce the five-minute default
+timestamp tolerance.
+
+A timestamp window limits stale requests; it is **not** durable replay protection.
+The receiving system must persist delivery IDs/idempotency keys and reject IDs
+already accepted. This module is a signing/verification primitive, not yet the
+complete subscription-management or customer-delivery pipeline.
+
 ## Required before production
 
 - Implement business handlers, explicit API/event contracts and domain-specific tests.
