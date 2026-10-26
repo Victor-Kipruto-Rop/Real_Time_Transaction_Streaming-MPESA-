@@ -17,7 +17,8 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
       when is_binary(tenant_id) and byte_size(tenant_id) in 1..200 and
              is_binary(idempotency_key) and byte_size(idempotency_key) in 1..200 and
              is_binary(target_url) and is_list(event_types) and is_binary(secret) do
-    with true <- byte_size(secret) >= 32,\n         :ok <- validate_event_types(event_types),
+    with true <- byte_size(secret) >= 32,
+         :ok <- validate_event_types(event_types),
          {:ok, _} <- Processor.prepare(%{"target_url" => target_url, "payload" => %{}}),
          {:ok, encryption_key} <- encryption_key() do
       subscription_id = random_id()
@@ -65,6 +66,9 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
         {:error, _} ->
           {:error, :unavailable}
       end
+    else
+      false -> {:error, :invalid_secret}
+      {:error, reason} -> {:error, reason}
     end
   rescue
     _ -> {:error, :unavailable}
