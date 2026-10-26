@@ -1,4 +1,4 @@
-# PesaGuard Docker platform
+# TELIXO Docker platform
 
 This repository now has per-platform Compose files and one root Compose entry point. These are **local development scaffolds**, not a production deployment or a claim that every service integration is complete.
 
@@ -53,7 +53,7 @@ The platform-specific stacks assume the relevant shared dependencies are availab
 ## Important limitations
 
 - The root Compose file includes all 20 Java services, 10 Elixir services, 3 Go services, 6 frontends, Python ingestion and local dependencies. This can require substantial RAM, CPU and disk; build one platform at a time if the machine is constrained.
-- The existing Python app entry point and environment requirements may need local project-specific configuration; this Compose file uses the existing root Dockerfile and does not migrate the existing runtime package.
+- The Python code now lives under `Python/`. The root Dockerfiles intentionally use the repository root as the build context and copy the required modules from `Python/`; verify these image builds in CI before treating the refactor as runnable.
 - Java and Elixir services are generated scaffolds. Building or starting a container does not mean the service has working business endpoints, health checks, database migrations, auth, or event integration.
 - The Go relay needs its Go-owned outbox schema applied to its intended database and must not be pointed at the existing Python outbox until ownership/schema are audited. The relay does not create outbox rows itself.
 - The Go quota engine is not automatically inserted into the Java gateway request path. The monitor is internal and must not be exposed directly to the public status website.
