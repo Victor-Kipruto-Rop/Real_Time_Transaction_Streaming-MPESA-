@@ -107,7 +107,7 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
 
   @doc false
   def parse_status_line(status_line) when is_binary(status_line) do
-    case Regex.run(~r/^HTTP\/\d(?:\.\d)?\s+(\d{3})(?:\s|$)/, status_line) do
+    case Regex.run(~r/^HTTP\/1\.[01]\s+([1-5]\d\d)(?:\s|$)/, status_line) do
       [_, status] -> {:ok, String.to_integer(status)}
       _ -> {:error, :invalid_http_response}
     end
