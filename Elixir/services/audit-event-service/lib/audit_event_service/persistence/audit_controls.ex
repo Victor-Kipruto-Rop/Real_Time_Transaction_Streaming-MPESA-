@@ -34,20 +34,22 @@ defmodule PesaGuard.AuditEventService.Persistence.AuditControls do
 
       result =
         Postgrex.transaction(@connection, fn conn ->
-          Postgrex.query!(conn, """
-          INSERT INTO telixo_audit_retention_policies
-            (tenant_id, retention_days, legal_hold, updated_by)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (tenant_id) DO UPDATE
-            SET retention_days = EXCLUDED.retention_days,
-                legal_hold = EXCLUDED.legal_hold,
-                updated_by = EXCLUDED.updated_by,
-                updated_at = now()
-          RETURNING tenant_id, retention_days, legal_hold, updated_by, updated_at
-          """, [tenant_id, days, legal_hold, actor_id]).rows
-          |> then(fn [row] -> decode_policy(row) end)
+          policy =
+            Postgrex.query!(conn, """
+            INSERT INTO telixo_audit_retention_policies
+              (tenant_id, retention_days, legal_hold, updated_by)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (tenant_id) DO UPDATE
+              SET retention_days = EXCLUDED.retention_days,
+                  legal_hold = EXCLUDED.legal_hold,
+                  updated_by = EXCLUDED.updated_by,
+                  updated_at = now()
+            RETURNING tenant_id, retention_days, legal_hold, updated_by, updated_at
+            """, [tenant_id, days, legal_hold, actor_id]).rows
+            |> then(fn [row] -> decode_policy(row) end)
 
           insert_access_log(conn, access_id, tenant_id, actor_id, "audit.retention_policy_updated", reason, request_id)
+          policy
         end)
 
       case result do
