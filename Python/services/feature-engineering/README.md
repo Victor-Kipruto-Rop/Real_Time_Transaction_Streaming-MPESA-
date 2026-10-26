@@ -1,5 +1,9 @@
 # Feature Engineering Service
 
+**Priority:** High
+
+**Design responsibility:** Prepare validated, versioned, point-in-time-correct features for risk models and anomaly detection.
+
 **Purpose:** Build validated, versioned, point-in-time-correct features for risk scoring and model evaluation.
 
 ## Contract
