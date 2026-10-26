@@ -266,9 +266,11 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
     SET status = 'delivered', last_http_status = $3, delivered_at = now(),
         lease_expires_at = NULL, last_error = NULL, updated_at = now()
     WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'in_progress'
+    RETURNING attempts, subscription_id, event_id, event_type
     """
 
-    update_one(sql, [tenant_id, delivery_id, http_status])
+    record_attempt(tenant_id, delivery_id, sql, [tenant_id, delivery_id, http_status],
+      "delivered", http_status, nil)
   end
 
   def fail(tenant_id, delivery_id, reason, permanent? \\ false)
@@ -277,23 +279,46 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
     sql = """
     UPDATE telixo_customer_webhook_deliveries
     SET status = CASE WHEN attempts >= $4 OR $5 THEN 'dead_lettered' ELSE 'pending' END,
-        next_attempt_at = now() + LEAST(300, power(2, LEAST(attempts, 8))) * interval '1 second',
+        next_attempt_at = now() + LEAST(300, GREATEST(1,
+          floor(power(2, LEAST(attempts, 8)) * (0.75 + random() * 0.5)))) * interval '1 second',
         lease_expires_at = NULL, last_error = left($3, 1000), updated_at = now()
     WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'in_progress'
+    RETURNING attempts, subscription_id, event_id, event_type, status
     """
 
-    update_one(sql, [tenant_id, delivery_id, reason, @max_attempts, permanent?])
+    record_attempt(tenant_id, delivery_id, sql,
+      [tenant_id, delivery_id, reason, @max_attempts, permanent?],
+      if(permanent?, do: "permanent_failure", else: "retry_or_dead_letter"),
+      nil, reason)
   end
 
-  defp update_one(sql, params) do
-    case Postgrex.query(@connection, sql, params) do
-      {:ok, %{num_rows: 1}} -> :ok
-      {:ok, %{num_rows: 0}} -> {:error, :conflict}
+  defp record_attempt(tenant_id, delivery_id, sql, params, outcome, http_status, error_code) do
+    case Postgrex.transaction(@connection, fn conn ->
+           case Postgrex.query!(conn, sql, params).rows do
+             [[attempt_number, subscription_id, event_id, event_type | _rest]] ->
+               Postgrex.query!(conn, """
+               INSERT INTO telixo_customer_webhook_attempts
+                 (tenant_id, delivery_id, subscription_id, event_id, event_type,
+                  attempt_number, outcome, http_status, error_code)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+               """, [tenant_id, delivery_id, subscription_id, event_id, event_type,
+                     attempt_number, outcome, http_status, safe_error_code(error_code)])
+               :ok
+
+             [] ->
+               {:error, :conflict}
+           end
+         end) do
+      {:ok, result} -> result
       {:error, _} -> {:error, :unavailable}
     end
   rescue
     _ -> {:error, :unavailable}
   end
+
+  defp safe_error_code(nil), do: nil
+  defp safe_error_code(code) when is_binary(code), do: String.slice(code, 0, 160)
+  defp safe_error_code(_), do: "unknown_error"
 
   defp get_subscription(tenant_id, subscription_id) do
     sql = """
