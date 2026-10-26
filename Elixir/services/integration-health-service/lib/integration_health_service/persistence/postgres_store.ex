@@ -117,7 +117,7 @@ defmodule PesaGuard.IntegrationHealthService.Persistence.PostgresStore do
     record_sql = """
     INSERT INTO telixo_service_records
       (record_id, service_name, tenant_id, kind, state, idempotency_key, payload)
-    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+    VALUES ($1, $2, $3, $4, $5, $6, $7::text::jsonb)
     ON CONFLICT (service_name, tenant_id, kind, idempotency_key) DO NOTHING
     RETURNING record_id, service_name, tenant_id, kind, state, idempotency_key,
               payload::text, created_at, updated_at
@@ -151,7 +151,7 @@ defmodule PesaGuard.IntegrationHealthService.Persistence.PostgresStore do
 
                Postgrex.query!(
                  conn,
-                 "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
+                 "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::text::jsonb)",
                  [record_id, @service, tenant_id, event["event_type"], Jason.encode!(event)]
                )
 
@@ -245,7 +245,7 @@ defmodule PesaGuard.IntegrationHealthService.Persistence.PostgresStore do
 
                Postgrex.query!(
                  conn,
-                 "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
+                 "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::text::jsonb)",
                  [event_id, @service, tenant_id, event_type, Jason.encode!(event)]
                )
 
