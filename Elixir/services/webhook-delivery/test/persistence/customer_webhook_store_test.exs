@@ -29,6 +29,15 @@ if System.get_env("DATABASE_URL") do
       assert {:ok, duplicate, :duplicate} =
                CustomerWebhookStore.create_subscription(tenant, key, target, events, secret)
       assert duplicate.subscription_id == subscription.subscription_id
+
+      assert {:error, :idempotency_conflict} =
+               CustomerWebhookStore.create_subscription(
+                 tenant,
+                 key,
+                 "https://changed-endpoint.example.test/telixo",
+                 events,
+                 secret
+               )
       assert {:error, :idempotency_conflict} =
                CustomerWebhookStore.create_subscription(tenant, key, target, events, String.duplicate("z", 32))
       assert {:ok, []} = CustomerWebhookStore.list_subscriptions(tenant <> "-other")
