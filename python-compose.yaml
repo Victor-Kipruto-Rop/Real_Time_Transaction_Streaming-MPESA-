@@ -13,3 +13,13 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
+
+  risk-scoring:
+    build:
+      context: Python/services/risk-scoring
+      dockerfile: Dockerfile
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "127.0.0.1:8300:8300"
+    restart: unless-stopped
