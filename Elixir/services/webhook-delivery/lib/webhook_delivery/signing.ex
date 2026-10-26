@@ -93,7 +93,7 @@ defmodule PesaGuard.WebhookDelivery.Signing do
 
   defp timestamp_text(timestamp) when is_binary(timestamp) do
     case Integer.parse(timestamp) do
-      {value, ""} when value >= 0 -> {:ok, timestamp}
+      {value, ""} when value >= 0 -> {:ok, Integer.to_string(value)}
       _ -> {:error, :invalid_timestamp}
     end
   end
