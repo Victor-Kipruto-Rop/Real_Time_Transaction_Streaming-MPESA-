@@ -62,3 +62,7 @@ Health endpoint: `/actuator/health`. Restrict management endpoints to trusted in
 - No production infrastructure or traffic is changed by this scaffold.
 
 Each service README lists its implementation gates. A runnable health endpoint is not evidence that the domain service is production-ready.
+
+## Service engineering prompts
+
+Use the strict service-specific engineering prompts in [PROMPTS.md](PROMPTS.md) before implementing or refactoring a Java service. Each service directory contains a `PROMPT.md` defining ownership boundaries, security invariants, failure handling, required tests and completion gates.
