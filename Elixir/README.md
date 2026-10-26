@@ -45,3 +45,12 @@ Use the root `compose.yaml` to combine Elixir with the shared dependencies and o
 ## Security and production gates
 
 The services provide initial Phoenix endpoints, configuration hooks and smoke tests; they are **not automatically production-ready**. Before exposure, implement domain handlers, authorization, event/database adapters, migrations where needed, idempotency, bounded retries, durable dead-letter/replay, observability, rate limits, resource budgets, dependency scanning, SBOM, backup/restore and runbooks. Set production secrets securely and restrict management endpoints. Never log API keys, access tokens, PINs, callback secrets or sensitive payloads.
+
+
+## Authenticated API and durable outbox
+
+Each service exposes liveness at `GET /health`, database-backed readiness at `GET /ready`, and authenticated tenant-scoped record endpoints under `/v1/records`. API requests require a bearer JWT signed with HS256. Claims must include `tenant_id`, `sub`, `iss`, `aud`, and `exp`; the default issuer and audience are `telixo`. Set `JWT_SECRET` to at least 32 bytes and align `JWT_ISSUER` with the trusted issuer.
+
+Record creation and state changes write an event to PostgreSQL's transactional outbox in the same transaction. The outbox relay delivers events at least once to the configured `EVENT_RELAY_URL` using `EVENT_RELAY_TOKEN`; the receiver must durably accept events and deduplicate by the `Idempotency-Key` header. Delivery attempts are leased, retried with bounded backoff, and dead-lettered after repeated or permanent failures.
+
+The Compose stack now includes a PostgreSQL container. Before starting it, provide `ELIXIR_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `JWT_SECRET`, `EVENT_RELAY_URL`, and `EVENT_RELAY_TOKEN` in the environment. Never use development placeholders for production secrets. The shared record API and outbox are a common foundation; service-specific business handlers and external-provider adapters still require service-level integration tests.
