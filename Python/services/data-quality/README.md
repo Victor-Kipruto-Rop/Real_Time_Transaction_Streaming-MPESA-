@@ -1,5 +1,9 @@
 # Data Quality Service
 
+**Priority:** Critical
+
+**Design responsibility:** Validate schemas, required fields, timestamps, amounts, currency and cross-record consistency; quarantine invalid records with reason codes and controlled replay.
+
 **Role:** validate event schemas, semantic rules and cross-record consistency; create durable quality findings and quarantine invalid records for controlled recovery.
 
 ## Responsibilities
