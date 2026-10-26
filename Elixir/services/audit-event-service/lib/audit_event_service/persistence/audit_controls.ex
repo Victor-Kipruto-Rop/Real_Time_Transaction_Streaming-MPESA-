@@ -3,8 +3,8 @@ defmodule PesaGuard.AuditEventService.Persistence.AuditControls do
   Tenant-scoped retention policy and append-only privileged-access history.
 
   HTTP callers must be authorized by AdminController before invoking mutations.
-  Retention policy changes are metadata only; physical expiry/purge must be
-  performed by the separately authorized archive/retention executor.
+  The separately authorized retention task consumes policy and legal-hold state
+  before archiving and purging expired ledger prefixes.
   """
 
   @connection PesaGuard.AuditEventService.Persistence.PostgresConnection
