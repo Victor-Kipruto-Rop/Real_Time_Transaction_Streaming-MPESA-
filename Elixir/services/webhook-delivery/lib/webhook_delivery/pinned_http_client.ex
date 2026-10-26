@@ -122,7 +122,7 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
 
   @doc false
   def parse_status_response(buffer) when is_binary(buffer) do
-    case :binary.match(buffer, "\\r\\n") do
+    case :binary.match(buffer, "\r\n") do
       {index, 2} ->
         buffer
         |> binary_part(0, index)
