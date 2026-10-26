@@ -29,6 +29,8 @@ if System.get_env("DATABASE_URL") do
       assert {:ok, duplicate, :duplicate} =
                CustomerWebhookStore.create_subscription(tenant, key, target, events, secret)
       assert duplicate.subscription_id == subscription.subscription_id
+      assert {:error, :idempotency_conflict} =
+               CustomerWebhookStore.create_subscription(tenant, key, target, events, String.duplicate("z", 32))
       assert {:ok, []} = CustomerWebhookStore.list_subscriptions(tenant <> "-other")
 
       event_id = "event-" <> Base.encode16(:crypto.strong_rand_bytes(8))
@@ -50,6 +52,20 @@ if System.get_env("DATABASE_URL") do
       assert item
       assert item.secret == secret
       assert :ok = CustomerWebhookStore.acknowledge(tenant, delivery.delivery_id, 204)
+
+      failed_event_id = "failed-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, failed_delivery, :created} =
+               CustomerWebhookStore.enqueue(tenant, subscription.subscription_id, failed_event_id,
+                 "reconciliation.completed", %{"case" => "dead-letter"})
+      assert {:ok, claimed_again} = CustomerWebhookStore.claim(100)
+      assert Enum.any?(claimed_again, &(&1.delivery_id == failed_delivery.delivery_id))
+      assert :ok = CustomerWebhookStore.fail(tenant, failed_delivery.delivery_id, "permanent test failure", true)
+      assert {:ok, %{rows: [["dead_lettered"]]}} =
+               Postgrex.query(
+                 PesaGuard.WebhookDelivery.Persistence.PostgresConnection,
+                 "SELECT status FROM telixo_customer_webhook_deliveries WHERE tenant_id = $1 AND delivery_id = $2",
+                 [tenant, failed_delivery.delivery_id]
+               )
     end
 
     test "rejects weak secrets and event types outside the subscription allowlist" do
