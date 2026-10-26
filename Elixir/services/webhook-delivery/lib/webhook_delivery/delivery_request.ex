@@ -37,7 +37,7 @@ defmodule PesaGuard.WebhookDelivery.DeliveryRequest do
   def build(_, _, _), do: {:error, :invalid_subscription_or_event}
 
   defp stable_delivery_id(subscription_id, event_id) do
-    :crypto.hash(:sha256, subscription_id <> ":" <> event_id)
+    :crypto.hash(:sha256, Jason.encode!([subscription_id, event_id]))
     |> Base.url_encode64(padding: false)
   end
 end
