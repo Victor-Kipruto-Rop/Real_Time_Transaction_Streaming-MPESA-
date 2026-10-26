@@ -17,8 +17,7 @@ timestamp tolerance.
 
 A timestamp window limits stale requests; it is **not** durable replay protection.
 The receiving system must persist delivery IDs/idempotency keys and reject IDs
-already accepted. This module is a signing/verification primitive, not yet the
-complete subscription-management or customer-delivery pipeline.
+already accepted. The `PesaGuard.WebhookDelivery.DeliveryRequest` module validates a target and builds a signed request envelope with a stable delivery ID for a subscription/event pair. It deliberately performs no network I/O and writes no delivery state. This is not yet the complete subscription-management or customer-delivery pipeline.
 
 ## Required before production
 
