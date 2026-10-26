@@ -32,7 +32,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
   def record_consent(tenant_id, recipient_ref, purpose, granted, source, updated_by)
       when is_binary(tenant_id) and is_binary(recipient_ref) and is_binary(purpose) and
              is_boolean(granted) and is_binary(source) and is_binary(updated_by) do
-    with :ok <- validate_identifiers(tenant_id, recipient_ref, purpose, source, updated_by) do
+    with :ok <- validate_identifiers([tenant_id, recipient_ref, purpose, source, updated_by]) do
       transaction_with_event(
         tenant_id,
         "notification-policy.consent_changed",
@@ -56,7 +56,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
   def set_preference(tenant_id, recipient_ref, channel, enabled, updated_by)
       when is_binary(tenant_id) and is_binary(recipient_ref) and channel in @channels and
              is_boolean(enabled) and is_binary(updated_by) do
-    with :ok <- validate_identifiers(tenant_id, recipient_ref, channel, updated_by) do
+    with :ok <- validate_identifiers([tenant_id, recipient_ref, channel, updated_by]) do
       transaction_with_event(
         tenant_id,
         "notification-policy.preference_changed",
@@ -79,7 +79,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
   def suppress(tenant_id, recipient_ref, reason_code, created_by)
       when is_binary(tenant_id) and is_binary(recipient_ref) and is_binary(reason_code) and
              is_binary(created_by) do
-    with :ok <- validate_identifiers(tenant_id, recipient_ref, reason_code, created_by) do
+    with :ok <- validate_identifiers([tenant_id, recipient_ref, reason_code, created_by]) do
       transaction_with_event(
         tenant_id,
         "notification-policy.recipient_suppressed",
@@ -102,7 +102,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
 
   def unsuppress(tenant_id, recipient_ref, changed_by)
       when is_binary(tenant_id) and is_binary(recipient_ref) and is_binary(changed_by) do
-    with :ok <- validate_identifiers(tenant_id, recipient_ref, changed_by) do
+    with :ok <- validate_identifiers([tenant_id, recipient_ref, changed_by]) do
       transaction_with_event(
         tenant_id,
         "notification-policy.recipient_unsuppressed",
