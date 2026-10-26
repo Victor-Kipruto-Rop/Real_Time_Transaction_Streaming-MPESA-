@@ -20,6 +20,13 @@ if System.get_env("DATABASE_URL") do
                )
 
       assert record.payload == payload
+
+      assert {:ok, %{rows: [[1]]}} =
+               Postgrex.query(
+                 PesaGuard.WorkflowOrchestrator.Persistence.PostgresConnection,
+                 "SELECT count(*)::int FROM telixo_schema_migrations WHERE service_name = $1 AND version = '001'",
+                 [record.service_name]
+               )
       assert {:error, :not_found} = PostgresStore.get(tenant_id <> "-other", record.record_id)
 
       assert {:ok, updated} =
