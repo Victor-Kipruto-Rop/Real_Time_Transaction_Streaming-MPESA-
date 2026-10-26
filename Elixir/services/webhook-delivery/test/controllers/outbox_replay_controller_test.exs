@@ -1,7 +1,7 @@
 defmodule PesaGuard.WebhookDelivery.OutboxReplayControllerTest do
   use ExUnit.Case, async: false
 
-  alias PesaGuard.WebhookDelivery.Router
+  alias PesaGuard.WebhookDelivery.Endpoint
 
   @secret String.duplicate("replay-controller-test-secret-", 2)
 
@@ -55,7 +55,7 @@ defmodule PesaGuard.WebhookDelivery.OutboxReplayControllerTest do
     Plug.Test.conn("POST", "/v1/outbox/event-test-id/replay", Jason.encode!(body))
     |> Plug.Conn.put_req_header("content-type", "application/json")
     |> Plug.Conn.put_req_header("authorization", "Bearer " <> token)
-    |> Router.call(Router.init([]))
+    |> Endpoint.call(Endpoint.init([]))
   end
 
   defp sign_token(claims) do
