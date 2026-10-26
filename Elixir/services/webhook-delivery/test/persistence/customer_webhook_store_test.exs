@@ -259,6 +259,5 @@ if System.get_env("DATABASE_URL") do
       assert recovered.attempts == 2
       assert recovered.secret == first.secret
     end
-
   end
 end
