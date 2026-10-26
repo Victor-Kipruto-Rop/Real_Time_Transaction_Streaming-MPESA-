@@ -108,11 +108,15 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
     # ranges that can tunnel or encode non-public IPv4 destinations.
     global_unicast? = a >= 0x2000 and a <= 0x3FFF
     teredo? = a == 0x2001 and b == 0x0000
+    benchmarking? = a == 0x2001 and b == 0x0002
     orchid_v1? = a == 0x2001 and b == 0x0010
-    documentation? = (a == 0x2001 and b == 0x0DB8) or (a == 0x3FFF)
+    orchid_v2? = a == 0x2001 and b == 0x0020
+    documentation? = (a == 0x2001 and b == 0x0DB8) or a == 0x3FFF
     six_to_four? = a == 0x2002
     _ = c
-    global_unicast? and not (teredo? or orchid_v1? or documentation? or six_to_four?)
+
+    global_unicast? and
+      not (teredo? or benchmarking? or orchid_v1? or orchid_v2? or documentation? or six_to_four?)
   end
 
   defp public_address?(_), do: false
