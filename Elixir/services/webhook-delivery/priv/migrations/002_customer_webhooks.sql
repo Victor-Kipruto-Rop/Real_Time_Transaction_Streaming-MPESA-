@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS telixo_webhook_subscriptions (
   secret_ciphertext BYTEA NOT NULL,
   secret_nonce BYTEA NOT NULL,
   secret_tag BYTEA NOT NULL,
+  secret_fingerprint BYTEA NOT NULL,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
