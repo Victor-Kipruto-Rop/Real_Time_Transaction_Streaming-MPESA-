@@ -34,6 +34,8 @@ services:
       JWT_ISSUER: "${JWT_ISSUER:-telixo}"
       EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
       EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
+      WEBHOOK_DELIVERY_WORKER_ENABLED: "true"
+      WEBHOOK_ENCRYPTION_KEY: "${WEBHOOK_ENCRYPTION_KEY:?set WEBHOOK_ENCRYPTION_KEY (base64 32-byte key)}"
     ports:
       - "127.0.0.1:8200:8080"
     restart: unless-stopped
