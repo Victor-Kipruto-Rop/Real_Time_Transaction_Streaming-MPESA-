@@ -23,5 +23,9 @@ defmodule PesaGuard.AuditEventService.Telemetry do
     ]
   end
 
-  defp periodic_measurements, do: [{:process_info, :memory}]
+  def dispatch_vm_memory do
+    :telemetry.execute([:vm, :memory], %{total: :erlang.memory(:total)}, %{})
+  end
+
+  defp periodic_measurements, do: [{__MODULE__, :dispatch_vm_memory, []}]
 end
