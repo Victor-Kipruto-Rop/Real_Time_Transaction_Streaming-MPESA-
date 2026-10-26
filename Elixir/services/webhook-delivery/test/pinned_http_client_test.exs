@@ -29,13 +29,15 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClientTest do
   test "parses valid HTTP status lines from the pinned TLS response" do
     assert {:ok, 200} = PinnedHttpClient.parse_status_line("HTTP/1.1 200 OK")
     assert {:ok, 204} = PinnedHttpClient.parse_status_line("HTTP/1.0 204")
-    assert {:ok, 503} = PinnedHttpClient.parse_status_line("HTTP/2 503 Service Unavailable")
+    assert {:ok, 503} = PinnedHttpClient.parse_status_line("HTTP/1.1 503 Service Unavailable")
   end
 
   test "rejects malformed status lines rather than treating them as delivery success" do
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("not HTTP")
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("HTTP/1.1 20 OK")
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("HTTP/1.1 2000 OK")
+    assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("HTTP/2 503 Service Unavailable")
+    assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("HTTP/1.1 600 Invalid")
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line(nil)
   end
 
