@@ -39,7 +39,7 @@ defmodule PesaGuard.WebhookDelivery.OutboxReplayController do
     scopes = Map.get(claims, "scopes", [])
     scope_string = Map.get(claims, "scope", "")
 
-    @required_scope in scopes or
+    (is_list(scopes) and @required_scope in scopes) or
       (is_binary(scope_string) and @required_scope in String.split(scope_string))
   end
 end
