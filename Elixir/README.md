@@ -74,3 +74,8 @@ These modules implement deterministic validation and initial scoring contracts. 
 
 
 The outbox relay requires an HTTPS endpoint and verifies TLS certificates before sending bearer credentials. The relay processes bounded batches and reclaims expired leases after a worker crash.
+
+
+## Release gate
+
+Before promotion, run `mix format --check-formatted`, `MIX_ENV=test mix compile --warnings-as-errors`, and `mix test` inside every service directory. Then run PostgreSQL-backed integration tests for duplicate idempotency keys, conflicting payloads, tenant isolation, concurrent transitions, outbox lease expiry, retry exhaustion, permanent HTTP failures, and relay crash recovery. The current unit suite does not replace these integration tests.
