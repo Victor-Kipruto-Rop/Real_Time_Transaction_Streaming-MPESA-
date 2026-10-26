@@ -18,6 +18,7 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
          true <- addresses != [] and Enum.all?(addresses, &public_address?/1) do
       :ok
     else
+      true -> {:error, :target_url_ip_literal_forbidden}
       false -> {:error, :target_url_private_host_forbidden}
       {:error, reason} -> {:error, reason}
       _ -> {:error, :target_url_dns_resolution_failed}
