@@ -23,11 +23,33 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       not non_empty?(recipient) -> {:error, :recipient_ref_required}
       channel not in @channels -> {:error, :unsupported_channel}
       not non_empty?(purpose) -> {:error, :consent_purpose_missing}
-      true -> load_and_authorize(tenant_id, recipient, channel, purpose, intent)
+      true -> load_and_authorize(@connection, tenant_id, recipient, channel, purpose, intent)
     end
   end
 
   def authorize(_, _), do: {:error, :invalid_policy_context}
+
+  @doc false
+  def authorize_with_connection(connection, tenant_id, intent)
+      when is_binary(tenant_id) and is_map(intent) do
+    recipient = Map.get(intent, "recipient_ref")
+    channel = Map.get(intent, "channel")
+    purpose = Map.get(intent, "purpose")
+
+    cond do
+      not non_empty?(recipient) -> {:error, :recipient_ref_required}
+      channel not in @channels -> {:error, :unsupported_channel}
+      not non_empty?(purpose) -> {:error, :consent_purpose_missing}
+      true ->
+        lock_key = policy_lock_key(tenant_id, recipient)
+        Postgrex.query!(connection, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [lock_key])
+        load_and_authorize(connection, tenant_id, recipient, channel, purpose, intent)
+    end
+  rescue
+    _ -> {:error, :policy_store_unavailable}
+  end
+
+  def authorize_with_connection(_, _, _), do: {:error, :invalid_policy_context}
 
   def record_consent(tenant_id, recipient_ref, purpose, granted, source, updated_by)
       when is_binary(tenant_id) and is_binary(recipient_ref) and is_binary(purpose) and
@@ -119,7 +141,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
     _ -> {:error, :policy_store_unavailable}
   end
 
-  defp load_and_authorize(tenant_id, recipient, channel, purpose, intent) do
+  defp load_and_authorize(connection, tenant_id, recipient, channel, purpose, intent) do
     sql = """
     SELECT c.granted, c.purpose, p.enabled,
       EXISTS (
@@ -133,7 +155,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       ON p.tenant_id = $1 AND p.recipient_ref = $2 AND p.channel = $3
     """
 
-    case Postgrex.query(@connection, sql, [tenant_id, recipient, channel, purpose]) do
+    case Postgrex.query(connection, sql, [tenant_id, recipient, channel, purpose]) do
       {:ok, %{rows: [[granted, stored_purpose, enabled, suppressed]]}} ->
         consent =
           if is_nil(granted),
@@ -164,6 +186,18 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
     event_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
 
     case Postgrex.transaction(@connection, fn conn ->
+           case Map.get(payload, "recipient_ref") do
+             recipient when is_binary(recipient) ->
+               Postgrex.query!(
+                 conn,
+                 "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                 [policy_lock_key(tenant_id, recipient)]
+               )
+
+             _ ->
+               :ok
+           end
+
            mutation.(conn)
 
            event = %{
@@ -191,6 +225,11 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
     if Enum.all?(values, &(is_binary(&1) and byte_size(&1) in 1..256)),
       do: :ok,
       else: {:error, :invalid_policy_record}
+  end
+
+  defp policy_lock_key(tenant_id, recipient_ref) do
+    :crypto.hash(:sha256, tenant_id <> <<0>> <> recipient_ref)
+    |> Base.encode16(case: :lower)
   end
 
   defp non_empty?(value), do: is_binary(value) and String.trim(value) != ""
