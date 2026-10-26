@@ -47,7 +47,7 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
       a == 172 and b in 16..31 -> false
       a == 192 and b == 168 -> false
       a == 100 and b in 64..127 -> false
-      a == 192 and b == 0 and c == 0 -> false
+      a == 192 and b == 0 and c == 0 -> false\n      a == 192 and b == 0 and c == 2 -> false\n      a == 192 and b == 88 and c == 99 -> false\n      a == 198 and b == 51 and c == 100 -> false\n      a == 203 and b == 0 and c == 113 -> false
       a == 198 and b in 18..19 -> false
       a >= 224 -> false
       {a, b, c, d} == {255, 255, 255, 255} -> false
@@ -58,7 +58,7 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
   defp public_address?({a, _b, _c, _d, _e, _f, _g, _h}) do
     # Global unicast IPv6 currently occupies 2000::/3. Reject ULA, link-local,
     # loopback, unspecified, multicast, and IPv4-mapped addresses by default.
-    a >= 0x2000 and a <= 0x3FFF
+    a >= 0x2000 and a <= 0x3FFF and not (a == 0x2001 and b == 0x0DB8)
   end
 
   defp public_address?(_), do: false
