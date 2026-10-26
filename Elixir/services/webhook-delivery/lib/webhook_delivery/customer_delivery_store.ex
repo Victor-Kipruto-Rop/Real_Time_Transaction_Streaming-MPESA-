@@ -213,7 +213,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryStore do
 
   defp valid_event_type?(value) do
     is_binary(value) and byte_size(value) in 1..160 and
-      String.match?(value, ~r/\\A[a-zA-Z0-9._*-]+\\z/)
+      String.match?(value, ~r/\A[a-zA-Z0-9._*-]+\z/)
   end
 
   defp valid_event_id?(value), do: is_binary(value) and byte_size(value) in 1..200
