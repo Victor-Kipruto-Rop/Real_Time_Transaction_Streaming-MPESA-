@@ -105,6 +105,16 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
     |> IO.iodata_to_binary()
   end
 
+  @doc false
+  def parse_status_line(status_line) when is_binary(status_line) do
+    case Regex.run(~r/^HTTP\/\d(?:\.\d)?\s+(\d{3})(?:\s|$)/, status_line) do
+      [_, status] -> {:ok, String.to_integer(status)}
+      _ -> {:error, :invalid_http_response}
+    end
+  end
+
+  def parse_status_line(_), do: {:error, :invalid_http_response}
+
   defp read_status_line(socket, buffer, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
     read_status_line_until(socket, buffer, deadline)
@@ -116,9 +126,9 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
       {index, 2} ->
         status_line = binary_part(buffer, 0, index)
 
-        case Regex.run(~r/^HTTP\\/\\d(?:\\.\\d)?\\s+(\\d{3})(?:\\s|$)/, status_line) do
-          [_, status] -> {:ok, String.to_integer(status)}
-          _ -> {:error, :invalid_http_response}
+        case parse_status_line(status_line) do
+          {:ok, status} -> {:ok, status}
+          {:error, reason} -> {:error, reason}
         end
 
       :nomatch ->
