@@ -1,0 +1,47 @@
+name: Docker platform configuration
+
+on:
+  pull_request:
+    paths:
+      - "compose.yaml"
+      - "*-compose.yaml"
+      - "Infrastructure/compose.yaml"
+      - "Java/**"
+      - "Elixir/**"
+      - "Go/**"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/docker-platform-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "compose.yaml"
+      - "*-compose.yaml"
+      - "Infrastructure/compose.yaml"
+      - "Java/**"
+      - "Elixir/**"
+      - "Go/**"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/docker-platform-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Docker Compose version
+        run: docker compose version
+      - name: Validate combined stack
+        run: docker compose -f compose.yaml config --quiet
+      - name: Validate standalone platform files
+        run: |
+          docker compose -f Infrastructure/compose.yaml config --quiet
+          docker compose -f python-compose.yaml config --quiet
+          docker compose -f Java/compose.yaml config --quiet
+          docker compose -f Elixir/compose.yaml config --quiet
+          docker compose -f Go/compose.yaml config --quiet
+          docker compose -f frontend/compose.yaml config --quiet
