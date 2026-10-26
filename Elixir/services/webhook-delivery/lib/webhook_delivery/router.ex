@@ -21,5 +21,9 @@ defmodule PesaGuard.WebhookDelivery.Router do
     post "/records", RecordsController, :create
     get "/records/:id", RecordsController, :show
     patch "/records/:id/state", RecordsController, :transition
+
+    get "/subscriptions", CustomerWebhooksController, :index
+    post "/subscriptions", CustomerWebhooksController, :create
+    post "/subscriptions/:subscription_id/deliveries", CustomerWebhooksController, :enqueue
   end
 end
