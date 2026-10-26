@@ -3,13 +3,13 @@ defmodule PesaGuard.AuditEventService.RecordsController do
 
   alias PesaGuard.AuditEventService.Domain.Processor
   alias PesaGuard.AuditEventService.Domain.Service
-  alias PesaGuard.AuditEventService.Persistence.PostgresStore
+  alias PesaGuard.AuditEventService.Persistence.AuditLedger
 
   def create(conn, params) do
     tenant_id = conn.assigns.tenant_context.tenant_id
     supplied_tenant = Map.get(params, "tenant_id")
     idempotency_key = conn |> Plug.Conn.get_req_header("idempotency-key") |> List.first()
-    kind = Map.get(params, "record_type", "default")
+    kind = Map.get(params, "record_type", "audit_event")
 
     cond do
       is_binary(supplied_tenant) and supplied_tenant != tenant_id ->
@@ -42,55 +42,24 @@ defmodule PesaGuard.AuditEventService.RecordsController do
   def show(conn, %{"id" => id}) do
     tenant_id = conn.assigns.tenant_context.tenant_id
 
-    case PostgresStore.get(tenant_id, id) do
-      {:ok, record} -> json(conn, %{data: record})
+    case AuditLedger.get(tenant_id, id) do
+      {:ok, event} -> json(conn, %{data: event})
       {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "not_found"})
       {:error, :unavailable} -> conn |> put_status(:service_unavailable) |> json(%{error: "persistence_unavailable"})
     end
   end
 
-  def transition(conn, %{"id" => id, "state" => next_state}) when is_binary(next_state) do
-    tenant_id = conn.assigns.tenant_context.tenant_id
-
-    with {:ok, current} <- PostgresStore.get(tenant_id, id),
-         true <- Service.transition_allowed?(current.state, next_state),
-         {:ok, updated} <- PostgresStore.transition(tenant_id, id, current.state, next_state) do
-      json(conn, %{data: updated})
-    else
-      {:error, :not_found} ->
-        conn |> put_status(:not_found) |> json(%{error: "not_found"})
-
-      {:error, :unavailable} ->
-        conn |> put_status(:service_unavailable) |> json(%{error: "persistence_unavailable"})
-
-      {:error, :conflict} ->
-        conn |> put_status(:conflict) |> json(%{error: "state_conflict"})
-
-      false ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_state_transition"})
-
-      _ ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_state_transition"})
-    end
-  end
-
   def transition(conn, _params) do
-    conn |> put_status(:bad_request) |> json(%{error: "state_required"})
+    conn |> put_status(:method_not_allowed) |> json(%{error: "audit_events_are_append_only"})
   end
 
-  defp persist(conn, tenant_id, kind, idempotency_key, prepared) do
-    case PostgresStore.insert_once(
-           tenant_id,
-           kind,
-           idempotency_key,
-           Service.initial_state(),
-           prepared
-         ) do
-      {:ok, record, :created} ->
-        conn |> put_status(:created) |> json(%{data: record, idempotent_replay: false})
+  defp persist(conn, tenant_id, _kind, idempotency_key, prepared) do
+    case AuditLedger.append(tenant_id, idempotency_key, prepared) do
+      {:ok, event, :created} ->
+        conn |> put_status(:created) |> json(%{data: event, idempotent_replay: false})
 
-      {:ok, record, :duplicate} ->
-        json(conn, %{data: record, idempotent_replay: true})
+      {:ok, event, :duplicate} ->
+        json(conn, %{data: event, idempotent_replay: true})
 
       {:error, :unavailable} ->
         conn |> put_status(:service_unavailable) |> json(%{error: "persistence_unavailable"})
@@ -98,11 +67,11 @@ defmodule PesaGuard.AuditEventService.RecordsController do
       {:error, :conflict} ->
         conn |> put_status(:conflict) |> json(%{error: "idempotency_conflict"})
 
-      {:error, _} ->
-        conn |> put_status(:conflict) |> json(%{error: "idempotency_conflict"})
+      {:error, _reason} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_audit_event"})
     end
   end
 
   defp valid_key?(key), do: is_binary(key) and byte_size(key) in 1..200
-  defp valid_kind?(kind), do: is_binary(kind) and byte_size(kind) in 1..80
+  defp valid_kind?(kind), do: kind == "audit_event"
 end
