@@ -1,46 +1,73 @@
-# TELIXO Python Service Boundaries
+# TELIXO Python Platform Architecture
 
-## Approved deployable services
+## Service boundaries and execution flow
 
-Start with four Python service boundaries:
+The ten service responsibilities and per-service contracts are defined in [SERVICE_CATALOG.md](SERVICE_CATALOG.md) and the README under each `services/<service-name>/` directory.
 
-1. **Transaction Ingestion** — consume durably accepted provider events and approved imports, normalize records and emit versioned internal events.
-2. **Reconciliation Engine** — deterministic matching and discrepancy classification against the canonical ledger interface.
-3. **Data Quality** — schema and business-rule validation, quarantine, replay metadata and quality metrics.
-4. **Risk Scoring** — explainable anomaly/risk signals with model/rule version metadata.
+1. **Java edge:** authenticate provider traffic and durably accept callbacks/requests. Python must not compete with this public edge.
+2. **Transaction Ingestion:** consume accepted events, validate the trusted envelope, normalize and publish versioned internal events.
+3. **Data Quality:** apply versioned schema/semantic rules. Invalid records receive durable reason-coded findings and quarantine references.
+4. **Stream Processing:** run continuous event-time transformations with checkpoints and replay.
+5. **Batch Processing:** run approved imports, historical backfills and bounded reprocessing jobs with checkpoints.
+6. **Reconciliation Engine:** match valid normalized provider records against the authorized Java-owned ledger interface and emit explainable outcomes.
+7. **Data Enrichment:** add only approved reference data, including source provenance and explicit unavailable states.
+8. **Feature Engineering:** produce versioned, point-in-time-correct features from approved data.
+9. **Risk Scoring:** compute explainable risk signals using approved feature/model versions.
+10. **Analytics and Metrics:** publish tenant-scoped derived aggregates; Java APIs authorize dashboard access.
+11. **Model Evaluation and Monitoring:** evaluate model quality and drift; recommendations do not silently promote models.
 
-Streaming, batch backfills, analytics, feature engineering and model evaluation start as libraries or scheduled jobs, not always-on microservices. Split them only when independent scaling, ownership, SLOs or failure isolation justify it.
+## Cross-platform ownership
 
-## Ownership and calls
+- **Java:** identity, authorization, tenant/merchant control plane, configured public callback boundary and canonical transaction-domain APIs/state.
+- **Python:** data processing, matching computation, quality findings, risk inference and analytics/ML workflows.
+- **Go:** event relay, quota enforcement and infrastructure monitoring.
+- **Elixir:** outbound webhook delivery, notification execution and delivery retry orchestration.
+- **Frontend:** user experience only; it never talks directly to databases or internal brokers.
 
-- Java owns the API/control plane, authentication, tenant/merchant configuration and canonical transaction-domain APIs.
-- Java's configured callback boundary performs provider-edge authentication and durable receipt. Python must not run a competing public callback receiver once that boundary is active.
-- Python ingestion consumes accepted events from Kafka/Redpanda, validates the internal envelope, normalizes provider fields, enforces durable idempotency and emits versioned events.
-- Python reconciliation uses the authorized ledger API/read model and produces matching outcomes/discrepancies. It must not create an alternative authoritative ledger.
-- Python data quality validates payloads and datasets. Quarantine must be durable and replayable.
-- Python risk scoring consumes approved features and returns a score, reason codes and model/rule version. It is a signal, not authorization to move funds.
-- Go owns event relay, quotas and infrastructure monitoring.
-- Elixir owns outbound webhooks, notifications and delivery retry orchestration.
+## Event and API contract rules
 
-## Event contract
+Every internal event should contain a stable `event_id`, `event_type`, `schema_version`, UTC occurrence/acceptance timestamps, `correlation_id`, trace context where available, source reference and tenant context from a verified internal envelope. Minimize personal/payment fields.
 
-Each internal event should carry `event_id`, `event_type`, `schema_version`, UTC occurrence/acceptance timestamps, `correlation_id`, trace context where available, a trusted tenant reference in a verified internal envelope, source/provider reference and a payload hash. Minimize sensitive fields.
-
-Consumers must be idempotent and commit offsets only after durable side effects. Poison messages go to a durable DLQ/quarantine with reason, attempt count, correlation ID and replay state. Use an outbox or equivalent recovery mechanism where database state and publication must be atomic.
-
-## Service API conventions
-
-- Health: `/health/live` and `/health/ready`; metrics endpoints internal-only.
-- Authenticate service-to-service calls with workload identity or short-lived credentials; use mTLS where supported.
-- Enforce tenant scope at every boundary. Never trust client/provider-supplied tenant IDs by themselves.
-- Use explicit timeouts, bounded concurrency, retry budgets and jittered exponential backoff.
-- Never log credentials, tokens, full payment payloads or unmasked personal identifiers.
-- Version OpenAPI/event contracts and run compatibility tests.
+Consumers must tolerate at-least-once delivery. Commit broker offsets only after durable side effects; use an outbox for state-plus-publication atomicity. Poison events go to durable DLQ/quarantine with reason, attempt count and replay state. Replay must be controlled and audited. Use authenticated service-to-service calls, explicit timeouts, bounded concurrency, retry budgets and circuit breakers where appropriate.
 
 ## Data ownership
 
-Java owns canonical tenant and transaction-domain state. Python may own ingestion receipts, processing attempts, quality findings, reconciliation computation artifacts and model metadata under explicit schemas and retention. Each service owns its migrations; multiple services must not write the same tables without a documented contract.
+Java remains canonical owner of tenant, merchant and transaction-domain state. Python services own only declared processing metadata, derived results and execution state. Each service has one schema/migration owner. Shared writable tables require an explicit reviewed contract; analytics datasets are read-only relative to canonical state.
 
-## Current-state warning
+## Service implementation template
 
-This is the target architecture. Existing modules remain during migration while imports, tests, Docker/Compose/Kubernetes manifests, scheduled jobs and CI are updated. A target directory or README is not proof of a runnable production service.
+```text
+services/<service-name>/
+  README.md
+  pyproject.toml
+  Dockerfile
+  src/telixo_<package>/
+    __init__.py
+    config.py
+    logging.py
+    health.py
+    app.py                 # only if an HTTP/API entry point is needed
+    domain/
+    application/
+    adapters/inbound/
+    adapters/outbound/
+    persistence/
+  tests/
+    unit/
+    contract/
+    integration/
+    fault/
+  deploy/                  # only deployment targets actually used
+  docs/
+    API.md
+    EVENTS.md
+    DATA_OWNERSHIP.md
+    THREAT_MODEL.md
+    RUNBOOK.md
+```
+
+Do not create boilerplate indiscriminately. Worker-only services need worker entry points, not artificial business APIs. Every deployable process needs appropriate health/readiness, structured logs, metrics, tracing, graceful shutdown, configuration validation and a service-specific CI path.
+
+## Status
+
+This is the agreed design target, not evidence that all ten runtime implementations exist. Existing legacy modules remain until dependency inventory, staged extraction, test verification and deployment updates are complete.
