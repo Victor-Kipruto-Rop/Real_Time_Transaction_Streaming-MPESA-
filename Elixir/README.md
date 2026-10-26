@@ -45,3 +45,7 @@ Use the root `compose.yaml` to combine Elixir with the shared dependencies and o
 ## Security and production gates
 
 The services provide initial Phoenix endpoints, configuration hooks and smoke tests; they are **not automatically production-ready**. Before exposure, implement domain handlers, authorization, event/database adapters, migrations where needed, idempotency, bounded retries, durable dead-letter/replay, observability, rate limits, resource budgets, dependency scanning, SBOM, backup/restore and runbooks. Set production secrets securely and restrict management endpoints. Never log API keys, access tokens, PINs, callback secrets or sensitive payloads.
+
+## Service engineering prompts
+
+Use [PROMPTS.md](PROMPTS.md) and the matching service-level `PROMPT.md` before implementing or refactoring an Elixir service. These prompts define service ownership, OTP reliability, security, durable delivery, test requirements and completion gates.
