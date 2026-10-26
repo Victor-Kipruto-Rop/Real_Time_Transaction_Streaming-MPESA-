@@ -1,36 +1,67 @@
-# TELIXO Python platform
+# TELIXO Python Platform
 
-Python owns data processing and intelligence, not a duplicate API gateway or payment execution platform.
+Python owns transaction-data processing, reconciliation computation, quality validation, risk inference and analytical/ML data workflows. It must not duplicate Java's API/control plane or canonical transaction domain, Go's event relay/quota/infrastructure monitoring, or Elixir's outbound webhook and notification execution.
 
-## Layout
+## The 10 planned services
 
-- `services/risk-scoring/`: first extracted service; stateless, explainable risk assessment.
-- `services/transaction-ingestion/`: planned; provider payload normalization and validated internal-event consumption.
-- `services/reconciliation/`: planned; tenant-ledger matching and discrepancy outcomes.
-- `services/data-quality/`: planned; quality rules, profiling and lineage.
-- `workers/`: only asynchronous workers with a documented event owner and idempotent processing contract.
-- `shared/`: small, versioned Python-only helpers; cross-language contracts belong under `Infrastructure/contracts/`.
-- `MIGRATION_PLAN.md`: source audit, ownership decisions and staged migration checklist.
+| # | Service | Priority |
+|---:|---|---|
+| 1 | `transaction-ingestion` | Critical |
+| 2 | `reconciliation-engine` | Critical |
+| 3 | `data-quality` | Critical |
+| 4 | `risk-scoring` | High |
+| 5 | `stream-processing` | High |
+| 6 | `batch-processing` | High |
+| 7 | `analytics-metrics` | High |
+| 8 | `feature-engineering` | High |
+| 9 | `data-enrichment` | Medium |
+| 10 | `model-evaluation-monitoring` | High |
 
-## Source backend
+These are ten explicit service boundaries and design specifications; they are not all implemented yet. Stream, batch, analytics and model-evaluation workloads may initially run as jobs/workers rather than continuously running services. Their ownership stays explicit; independent deployment should be justified by throughput, SLOs, fault isolation and operational cost.
 
-The source of truth for the migration is the `pesaguard_backend_pipeline` package in `Victor-Kipruto-Rop/api.pesaguard`. Do not copy the whole application as a second runnable monolith. Extract modules with their required tests and dependencies into one service at a time. Keep the source repository and its Alembic history unchanged while parity is being established.
+## Target layout
 
-## Local risk service
-
-From `Python/services/risk-scoring`:
-
-```bash
-python -m venv .venv
-# Activate the virtual environment for your shell.
-pip install -r requirements.txt
-pip install -e .
-pytest -q tests
-uvicorn risk_scoring.app:app --app-dir src --host 127.0.0.1 --port 8300
+```text
+Python/
+  services/
+    transaction-ingestion/
+    reconciliation-engine/
+    data-quality/
+    risk-scoring/
+    stream-processing/
+    batch-processing/
+    analytics-metrics/
+    feature-engineering/
+    data-enrichment/
+    model-evaluation-monitoring/
+  shared/
+    contracts/       # adapters to root contracts; no divergent schema copies
+    observability/
+    config/
+  jobs/               # scheduled entry points, not competing service domains
+  tests/
+    unit/
+    contract/
+    integration/
+    fault/
+    e2e/
+  docs/
+    SERVICE_CATALOG.md
+    ARCHITECTURE.md
+    MIGRATION.md
 ```
 
-- Liveness: `GET /health/live`
-- Readiness: `GET /health/ready`
-- Risk assessment: `POST /v1/risk/assess`
+## Non-negotiable boundaries
 
-The service returns an explainable risk signal only. It does not execute or authorize a financial action. Production integration requires authenticated service-to-service access, trusted tenant context, tenant-scoped history retrieval, rate limits, audit events and contract tests.
+- Consume provider events only after durable acceptance at the configured Java edge.
+- Canonical tenant, merchant and transaction-domain state remains Java-owned.
+- Go owns event relay, quota enforcement and infrastructure monitoring; Elixir owns outbound webhook delivery and notification execution.
+- TELIXO does not initiate, confirm, refund, reverse, settle or move funds.
+- Use versioned contracts, stable event IDs, trusted tenant context, durable idempotency, outbox/inbox, DLQ/quarantine, replay and correlation IDs.
+- Never fabricate enrichment or model results; represent unavailable/stale states explicitly.
+- Keep secrets out of source control and minimize sensitive data in logs and event payloads.
+- Do not delete legacy modules until imports, jobs, CI and deployment manifests are migrated and tests pass.
+
+## Design gate before implementation
+
+Review [service catalog](docs/SERVICE_CATALOG.md), [architecture](docs/ARCHITECTURE.md) and [migration plan](docs/MIGRATION.md). Each service needs approved API/event contracts, data ownership, threat model, SLO/runbook, failure/recovery plan and automated tests before implementation is considered ready.

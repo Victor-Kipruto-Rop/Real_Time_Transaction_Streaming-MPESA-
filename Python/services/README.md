@@ -1,11 +1,16 @@
-# Python services
+# Python service catalog
 
-| Service | Status | Responsibility | Next requirement |
-|---|---|---|---|
-| `risk-scoring` | Initial extraction | Stateless explainable transaction risk signal | CI tests, source golden-case parity, authenticated internal caller, tenant-scoped history |
-| `transaction-ingestion` | Planned | Normalize provider events after trusted callback intake | Map existing ingestion/validator modules and preserve idempotency/outbox |
-| `reconciliation` | Planned | Match imported ledger entries with provider transactions | Preserve matching semantics and golden datasets |
-| `data-quality` | Planned | Data quality rules, profiling and lineage | Inventory imports and agree data ownership |
-| `analytics-reporting` | Conditional | Aggregations and reports that have a clear consumer | Avoid duplicating frontend dashboards or Java reporting |
+TELIXO defines ten planned Python service boundaries. Each service has its own README design contract. See [the catalog](../docs/SERVICE_CATALOG.md) and [architecture](../docs/ARCHITECTURE.md).
 
-A directory name is not proof of a production-ready service. Each service must have independent dependency pins, container build, health endpoints, tests, ownership, versioned contracts, configuration documentation and CI.
+1. `transaction-ingestion`
+2. `reconciliation-engine`
+3. `data-quality`
+4. `risk-scoring`
+5. `stream-processing`
+6. `batch-processing`
+7. `analytics-metrics`
+8. `feature-engineering`
+9. `data-enrichment`
+10. `model-evaluation-monitoring`
+
+A directory or design document is not proof of a runnable implementation. Before a service is production-ready it needs an agreed contract, single data owner, threat model, migration plan, health/telemetry, tests, container build and CI. Legacy modules stay until staged migration and verification pass.
