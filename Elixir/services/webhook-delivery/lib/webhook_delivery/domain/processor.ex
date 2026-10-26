@@ -22,10 +22,12 @@ defmodule PesaGuard.WebhookDelivery.Domain.Processor do
   def prepare(_), do: {:error, :target_url_required}
 
   defp ip_literal?(host) do
-    case :inet.parse_address(String.to_charlist(host)) do
+    normalized_host = host |> String.trim_leading("[") |> String.trim_trailing("]")
+
+    case :inet.parse_address(String.to_charlist(normalized_host)) do
       {:ok, _address} -> true
       {:error, _reason} ->
-        case :inet.parse_ipv6_address(String.to_charlist(host)) do
+        case :inet.parse_ipv6_address(String.to_charlist(normalized_host)) do
           {:ok, _address} -> true
           {:error, _reason} -> false
         end
