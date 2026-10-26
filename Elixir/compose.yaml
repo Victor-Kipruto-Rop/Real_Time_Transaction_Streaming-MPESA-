@@ -1,0 +1,143 @@
+name: pesaguard-elixir
+services:
+  webhook-delivery:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: webhook-delivery
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8200:8080"
+    restart: unless-stopped
+  notification-service:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: notification-service
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8201:8080"
+    restart: unless-stopped
+  risk-engine:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: risk-engine
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8202:8080"
+    restart: unless-stopped
+  fraud-detection:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: fraud-detection
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8203:8080"
+    restart: unless-stopped
+  audit-event:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: audit-event
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8204:8080"
+    restart: unless-stopped
+  workflow-orchestrator:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: workflow-orchestrator
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8205:8080"
+    restart: unless-stopped
+  integration-health:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: integration-health
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8206:8080"
+    restart: unless-stopped
+  data-export:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: data-export
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8207:8080"
+    restart: unless-stopped
+  compliance-workflow:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: compliance-workflow
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8208:8080"
+    restart: unless-stopped
+  incident-management:
+    build:
+      context: ..
+      dockerfile: Elixir/Dockerfile
+      args:
+        SERVICE: incident-management
+    environment:
+      MIX_ENV: dev
+      PORT: "8080"
+      PHX_SERVER: "true"
+      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+    ports:
+      - "127.0.0.1:8209:8080"
+    restart: unless-stopped
+
