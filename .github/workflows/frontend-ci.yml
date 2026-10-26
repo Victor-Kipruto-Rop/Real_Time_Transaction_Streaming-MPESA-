@@ -1,0 +1,39 @@
+name: Frontend CI
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - developer-platform
+          - tenant-dashboard
+          - admin-dashboard
+          - public-website
+          - status-website
+          - docs-website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/${{ matrix.app }}/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend/${{ matrix.app }}
+        run: npm install
+      - name: Build application
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run build
