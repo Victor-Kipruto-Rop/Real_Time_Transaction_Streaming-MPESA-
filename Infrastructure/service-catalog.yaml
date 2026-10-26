@@ -1,0 +1,72 @@
+schemaVersion: 1
+productionTrafficChangeRequiresApproval: true
+secretsInSourceControl: false
+frontends:
+  - id: public-website
+    path: frontend/public-website
+    host: pesaguard.co.ke
+    policy: public
+  - id: tenant-dashboard
+    path: frontend/tenant-dashboard
+    host: app.pesaguard.co.ke
+    policy: authenticated-tenant-scoped
+  - id: admin-dashboard
+    path: frontend/admin-dashboard
+    host: admin.pesaguard.co.ke
+    policy: privileged-mfa-audited
+  - id: developer-platform
+    path: frontend/developer-platform
+    host: developers.pesaguard.co.ke
+    policy: developer-scopes-environment-separation
+  - id: docs-website
+    path: frontend/docs-website
+    host: docs.pesaguard.co.ke
+    policy: public-documentation
+  - id: status-website
+    path: frontend/status-website
+    host: status.pesaguard.co.ke
+    policy: public-status-read-only
+services:
+  - id: python-stream-ingestion
+    runtime: python
+    path: src/pesaguard_streaming
+    role: existing-mpesa-callback-and-stream-ingestion
+    status: owner-to-audit
+  - id: java-api-gateway
+    runtime: java
+    path: Java/services/api-gateway
+    role: external-routing-and-edge-policy
+    status: scaffold
+  - id: java-identity
+    runtime: java
+    path: Java/services/identity-service
+    role: identity-and-oidc
+    status: scaffold
+  - id: java-tenant
+    runtime: java
+    path: Java/services/tenant-service
+    role: tenant-lifecycle-and-trusted-context
+    status: scaffold
+  - id: java-transaction
+    runtime: java
+    path: Java/services/transaction-service
+    role: proposed-transaction-domain-boundary
+    status: audit-existing-backend-before-writes
+  - id: elixir-workloads
+    runtime: elixir
+    path: Elixir/services
+    role: concurrent-delivery-workflows-and-operations
+    status: scaffold
+dependencies:
+  - id: postgres
+    role: durable-service-owned-records
+    production_gate: managed-private-network-backups-and-restore-tests
+  - id: event-broker
+    role: versioned-asynchronous-events
+    production_gate: durable-replication-authentication-and-dlq
+  - id: redis
+    role: ephemeral-cache-and-coordination
+    production_gate: private-network-authentication-and-loss-recovery
+  - id: opentelemetry
+    role: correlated-telemetry
+    production_gate: redaction-retention-alerting-and-access-controls
