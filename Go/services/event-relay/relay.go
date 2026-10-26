@@ -182,11 +182,18 @@ dead_lettered_at=EXCLUDED.dead_lettered_at`,
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE go_event_outbox
+	result, err := tx.ExecContext(ctx, `UPDATE go_event_outbox
 SET dead_lettered_at=NOW(), locked_by=NULL, locked_until=NULL, last_error=$3
-WHERE id=$1 AND locked_by=$2 AND published_at IS NULL`, e.ID, r.InstanceID, reason)
+WHERE id=$1 AND locked_by=$2 AND published_at IS NULL AND dead_lettered_at IS NULL`, e.ID, r.InstanceID, reason)
 	if err != nil {
 		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return fmt.Errorf("outbox row %s lease was lost before dead-letter state was recorded", e.ID)
 	}
 	return tx.Commit()
 }
