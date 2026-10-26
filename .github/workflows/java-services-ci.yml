@@ -1,0 +1,27 @@
+name: Java services CI
+on:
+  pull_request:
+    paths:
+      - "Java/**"
+      - ".github/workflows/java-services-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Java/**"
+      - ".github/workflows/java-services-ci.yml"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: Java/pom.xml
+      - name: Verify all Java modules
+        working-directory: Java
+        run: mvn -B -ntp verify
