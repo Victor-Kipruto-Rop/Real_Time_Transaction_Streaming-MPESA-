@@ -24,7 +24,7 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
       subscription_id = random_id()
       nonce = :crypto.strong_rand_bytes(12)
       aad = associated_data(tenant_id, subscription_id)
-      {ciphertext, tag} = :crypto.crypto_one_time_aead(:aes_256_gcm, encryption_key, nonce, secret, aad, true)
+      {ciphertext, tag} = :crypto.crypto_one_time_aead(:aes_256_gcm, encryption_key, nonce, secret, aad, 16, true)
 
       sql = """
       INSERT INTO telixo_webhook_subscriptions
