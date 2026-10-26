@@ -99,6 +99,8 @@ defmodule PesaGuard.IncidentManagementService.Persistence.PostgresStore do
     end
   rescue
     _ -> {:error, :database_unavailable}
+  catch
+    :exit, _ -> {:error, :database_unavailable}
   end
 
   def insert_once(tenant_id, kind, idempotency_key, state, payload)
@@ -210,21 +212,55 @@ defmodule PesaGuard.IncidentManagementService.Persistence.PostgresStore do
               payload::text, created_at, updated_at
     """
 
-    case Postgrex.query(@connection, sql, [
-           next_state,
-           @service,
-           tenant_id,
-           record_id,
-           expected_state
-         ]) do
-      {:ok, %{rows: [row]}} -> {:ok, decode_row(row)}
-      {:ok, %{rows: []}} ->
-        case get(tenant_id, record_id) do
-          {:ok, _} -> {:error, :conflict}
-          error -> error
-        end
+    case Postgrex.transaction(@connection, fn conn ->
+           case Postgrex.query!(conn, sql, [
+                  next_state,
+                  @service,
+                  tenant_id,
+                  record_id,
+                  expected_state
+                ]).rows do
+             [row] ->
+               record = decode_row(row)
+               event_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+               event_type = "#{@service}.record_state_changed"
 
-      {:error, _} -> {:error, :unavailable}
+               event = %{
+                 "event_id" => event_id,
+                 "tenant_id" => tenant_id,
+                 "event_type" => event_type,
+                 "occurred_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+                 "schema_version" => 1,
+                 "payload" => %{
+                   "record_id" => record_id,
+                   "from_state" => expected_state,
+                   "to_state" => next_state
+                 }
+               }
+
+               Postgrex.query!(
+                 conn,
+                 "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
+                 [event_id, @service, tenant_id, event_type, Jason.encode!(event)]
+               )
+
+               {:ok, record}
+
+             [] ->
+               exists_sql = """
+               SELECT 1
+               FROM telixo_service_records
+               WHERE service_name = $1 AND tenant_id = $2 AND record_id = $3
+               """
+
+               case Postgrex.query!(conn, exists_sql, [@service, tenant_id, record_id]).rows do
+                 [] -> {:error, :not_found}
+                 _ -> {:error, :conflict}
+               end
+           end
+         end) do
+      {:ok, result} -> result
+      {:error, _reason} -> {:error, :unavailable}
     end
   rescue
     _ -> {:error, :unavailable}
