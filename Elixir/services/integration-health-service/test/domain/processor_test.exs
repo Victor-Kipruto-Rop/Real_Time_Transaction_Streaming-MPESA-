@@ -6,4 +6,9 @@ defmodule PesaGuard.IntegrationHealthService.Domain.ProcessorTest do
     assert {:error, :invalid_timeout} =
              Processor.prepare(%{"check_type" => "latency", "timeout_ms" => 60_000})
   end
+
+  test "accepts supported health checks with bounded timeouts" do
+    command = %{"check_type" => "connectivity", "timeout_ms" => 1_000}
+    assert {:ok, ^command} = Processor.prepare(command)
+  end
 end
