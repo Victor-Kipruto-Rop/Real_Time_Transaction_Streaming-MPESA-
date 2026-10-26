@@ -67,7 +67,6 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
                     archive_directory,
                     tenant_id,
                     events,
-                    cutoff,
                     actor_id,
                     String.trim(reason),
                     request_id
@@ -108,7 +107,7 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
     end)
   end
 
-  defp archive_and_purge!(connection, archive_directory, tenant_id, events, cutoff, actor_id, reason, request_id) do
+  defp archive_and_purge!(connection, archive_directory, tenant_id, events, actor_id, reason, request_id) do
     first_sequence = Enum.at(hd(events), 2)
     last_event = List.last(events)
     last_sequence = Enum.at(last_event, 2)
@@ -130,9 +129,7 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
     archived_bytes = File.read!(archive_path)
     archived_hash = :crypto.hash(:sha256, archived_bytes) |> Base.encode16(case: :lower)
 
-    unless Plug.Crypto.secure_compare(archive_hash, archived_hash) and
-             Plug.Crypto.secure_compare(archive_hash, archive_hash) and
-             archived_hash == archive_hash do
+    unless Plug.Crypto.secure_compare(archive_hash, archived_hash) do
       Mix.raise("Audit archive verification failed; no ledger rows were purged")
     end
 
