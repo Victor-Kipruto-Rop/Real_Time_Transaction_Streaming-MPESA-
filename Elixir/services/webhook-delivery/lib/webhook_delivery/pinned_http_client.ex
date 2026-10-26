@@ -120,18 +120,31 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
     read_status_line_until(socket, buffer, deadline)
   end
 
-  defp read_status_line_until(socket, buffer, deadline)
-       when byte_size(buffer) <= @max_status_line_bytes do
-    case :binary.match(buffer, "\r\n") do
+  @doc false
+  def parse_status_response(buffer) when is_binary(buffer) do
+    case :binary.match(buffer, "\\r\\n") do
       {index, 2} ->
-        status_line = binary_part(buffer, 0, index)
-
-        case parse_status_line(status_line) do
-          {:ok, status} -> {:ok, status}
-          {:error, reason} -> {:error, reason}
-        end
+        buffer
+        |> binary_part(0, index)
+        |> parse_status_line()
 
       :nomatch ->
+        :more
+    end
+  end
+
+  def parse_status_response(_), do: {:error, :invalid_http_response}
+
+  defp read_status_line_until(socket, buffer, deadline)
+       when byte_size(buffer) <= @max_status_line_bytes do
+    case parse_status_response(buffer) do
+      {:ok, status} ->
+        {:ok, status}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      :more ->
         remaining = deadline - System.monotonic_time(:millisecond)
 
         if remaining <= 0 do
