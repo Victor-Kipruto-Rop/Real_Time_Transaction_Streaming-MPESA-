@@ -10,7 +10,7 @@ defmodule PesaGuard.WebhookDelivery.OutboxRelay do
   alias PesaGuard.WebhookDelivery.Reliability.RetryPolicy
 
   @poll_interval_ms 1_000
-  @batch_size 50
+  @batch_size 10
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)

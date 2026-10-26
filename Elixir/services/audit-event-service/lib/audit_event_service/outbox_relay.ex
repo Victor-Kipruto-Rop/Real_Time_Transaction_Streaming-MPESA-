@@ -10,14 +10,14 @@ defmodule PesaGuard.AuditEventService.OutboxRelay do
   alias PesaGuard.AuditEventService.Reliability.RetryPolicy
 
   @poll_interval_ms 1_000
-  @batch_size 50
+  @batch_size 10
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   def children do
-    environment = Application.get_env(:audit_event_service, :environment)
+    environment = Application.get_env(:webhook_delivery, :environment)
     url = System.get_env("EVENT_RELAY_URL")
     token = System.get_env("EVENT_RELAY_TOKEN")
 

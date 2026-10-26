@@ -48,7 +48,7 @@ defmodule PesaGuard.NotificationService.Security.JWTAuth do
          {:ok, claims} when is_map(claims) <- Jason.decode(claims_json),
          {:ok, signature} <- Base.url_decode64(encoded_signature, padding: false),
          expected <- :crypto.mac(:hmac, :sha256, secret, encoded_header <> "." <> encoded_claims),
-         true <- Plug.Crypto.secure_compare(signature, expected),
+         true <- byte_size(signature) == byte_size(expected) and Plug.Crypto.secure_compare(signature, expected),
          :ok <- validate_claims(claims, issuer) do
       {:ok, claims}
     else
