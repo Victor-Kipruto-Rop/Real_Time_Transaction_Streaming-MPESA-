@@ -1,5 +1,8 @@
 name: Security Scan
 
+env:
+  PYTHONPATH: Python
+
 on:
   push:
     branches: [ main, develop ]
