@@ -63,6 +63,17 @@ if System.get_env("DATABASE_URL") do
       assert event
       assert event.tenant_id == tenant_id
       assert event.payload["payload"]["data"] == payload
+
+      assert {:ok, _result} =
+               Postgrex.query(
+                 PesaGuard.IntegrationHealthService.Persistence.PostgresConnection,
+                 "UPDATE telixo_outbox SET lease_expires_at = now() - interval '1 second' WHERE service_name = $1 AND tenant_id = $2 AND event_id = $3",
+                 [record.service_name, tenant_id, record.record_id]
+               )
+
+      assert {:ok, reclaimed_events} = PostgresStore.claim_outbox(50)
+      reclaimed_event = Enum.find(reclaimed_events, &(&1.event_id == record.record_id))
+      assert reclaimed_event.attempts == event.attempts + 1
       assert :ok = PostgresStore.acknowledge_outbox(tenant_id, record.record_id)
 
       transition_event =
