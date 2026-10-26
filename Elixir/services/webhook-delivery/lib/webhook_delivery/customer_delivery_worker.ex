@@ -73,8 +73,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       with {:ok, target} <- TargetPolicy.resolve_target(delivery.target_url),
            :ok <- EndpointCircuitBreaker.allow?(delivery.target_url),
            {:ok, headers} <- Signing.headers(delivery.delivery_id, delivery.secret, body, timestamp) do
-        request_headers = Enum.reject(headers, fn {name, _value} -> name == "content-type" end)
-        PinnedHttpClient.post(target, request_headers, body)
+        PinnedHttpClient.post(target, headers, body)
       end
 
     case result do
