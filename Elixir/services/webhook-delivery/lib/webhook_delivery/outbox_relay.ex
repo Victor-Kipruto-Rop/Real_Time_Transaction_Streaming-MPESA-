@@ -20,13 +20,17 @@ defmodule PesaGuard.WebhookDelivery.OutboxRelay do
     environment = Application.get_env(:webhook_delivery, :environment)
     url = System.get_env("EVENT_RELAY_URL")
     token = System.get_env("EVENT_RELAY_TOKEN")
+    uri = URI.parse(url || "")
+    secure_url? =
+      uri.scheme == "https" and is_binary(uri.host) and uri.host != "" and
+        uri.userinfo == nil and uri.port in [nil, 443]
 
     cond do
-      is_binary(url) and url != "" and is_binary(token) and byte_size(token) >= 32 ->
+      secure_url? and is_binary(token) and byte_size(token) >= 32 ->
         [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
 
       environment == :prod ->
-        raise "EVENT_RELAY_URL and a 32-byte EVENT_RELAY_TOKEN are required in production"
+        raise "EVENT_RELAY_URL must use HTTPS and EVENT_RELAY_TOKEN must be at least 32 bytes in production"
 
       true ->
         []
@@ -71,6 +75,7 @@ defmodule PesaGuard.WebhookDelivery.OutboxRelay do
           [
             timeout: 5_000,
             connect_timeout: 2_000,
+            autoredirect: false,
             ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
           ],
           body_format: :binary
