@@ -318,7 +318,7 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
     """
 
     record_attempt(tenant_id, delivery_id, sql,
-      [tenant_id, delivery_id, reason, @max_attempts, permanent?],
+      [tenant_id, delivery_id, safe_error_code(reason), @max_attempts, permanent?],
       if(permanent?, do: "permanent_failure", else: "retry_or_dead_letter"),
       nil, reason)
   end
