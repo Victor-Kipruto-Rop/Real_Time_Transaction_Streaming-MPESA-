@@ -135,15 +135,25 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
 
     File.mkdir_p!(archive_directory)
 
-    case File.open(archive_path, [:write, :binary, :exclusive], 0o600, fn file ->
-           with :ok <- IO.binwrite(file, archive_bytes),
-                :ok <- :file.sync(file) do
-             :ok
-           end
-         end) do
-      {:ok, :ok} -> :ok
-      {:ok, {:error, reason}} -> Mix.raise("Could not durably write audit archive: #{inspect(reason)}")
-      {:error, reason} -> Mix.raise("Could not create audit archive: #{inspect(reason)}")
+    case File.open(archive_path, [:write, :binary, :exclusive], 0o600) do
+      {:ok, file} ->
+        write_result =
+          try do
+            with :ok <- IO.binwrite(file, archive_bytes),
+                 :ok <- :file.sync(file) do
+              :ok
+            end
+          after
+            File.close(file)
+          end
+
+        case write_result do
+          :ok -> :ok
+          {:error, reason} -> Mix.raise("Could not durably write audit archive: #{inspect(reason)}")
+        end
+
+      {:error, reason} ->
+        Mix.raise("Could not create audit archive: #{inspect(reason)}")
     end
 
     archived_bytes = File.read!(archive_path)

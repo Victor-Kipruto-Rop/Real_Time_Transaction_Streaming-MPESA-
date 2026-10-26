@@ -215,5 +215,49 @@ if System.get_env("DATABASE_URL") do
                CustomerWebhookStore.create_subscription(tenant, "weak-key",
                  "https://hooks.example.test/events", ["event.ok"], "short")
     end
+
+    test "reclaims a delivery after an expired worker lease and increments attempts" do
+      tenant = "wh-lease-recovery-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, subscription, :created} =
+               CustomerWebhookStore.create_subscription(
+                 tenant,
+                 "lease-recovery-" <> Base.encode16(:crypto.strong_rand_bytes(8)),
+                 "https://hooks.example.test/events",
+                 ["reconciliation.completed"],
+                 String.duplicate("r", 32)
+               )
+
+      event_id = "lease-event-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, delivery, :created} =
+               CustomerWebhookStore.enqueue(
+                 tenant,
+                 subscription.subscription_id,
+                 event_id,
+                 "reconciliation.completed",
+                 %{"case" => "worker-crash-recovery"}
+               )
+
+      assert {:ok, first_claim} = CustomerWebhookStore.claim(100)
+      first = Enum.find(first_claim, &(&1.delivery_id == delivery.delivery_id))
+      assert first
+      assert first.attempts == 1
+
+      assert {:ok, %{num_rows: 1}} =
+               Postgrex.query(
+                 PesaGuard.WebhookDelivery.Persistence.PostgresConnection,
+                 """
+                 UPDATE telixo_customer_webhook_deliveries
+                 SET lease_expires_at = now() - interval '1 second'
+                 WHERE tenant_id = $1 AND delivery_id = $2 AND status = 'in_progress'
+                 """,
+                 [tenant, delivery.delivery_id]
+               )
+
+      assert {:ok, recovered_claim} = CustomerWebhookStore.claim(100)
+      recovered = Enum.find(recovered_claim, &(&1.delivery_id == delivery.delivery_id))
+      assert recovered
+      assert recovered.attempts == 2
+      assert recovered.secret == first.secret
+    end
   end
 end
