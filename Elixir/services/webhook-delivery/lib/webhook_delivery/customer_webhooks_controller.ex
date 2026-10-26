@@ -133,6 +133,10 @@ defmodule PesaGuard.WebhookDelivery.CustomerWebhooksController do
       case CustomerWebhookStore.enqueue_for_event(tenant_id, event_id, event_type, payload) do
         {:ok, deliveries} ->
           conn |> put_status(:accepted) |> json(%{data: %{event_id: event_id, queued_count: length(deliveries)}})
+        {:error, {:fanout_incomplete, :event_conflict}} ->
+          conn |> put_status(:conflict) |> json(%{error: "event_id_payload_conflict"})
+        {:error, {:fanout_incomplete, _reason}} ->
+          conn |> put_status(:service_unavailable) |> json(%{error: "event_fanout_incomplete"})
         {:error, _} ->
           conn |> put_status(:service_unavailable) |> json(%{error: "event_fanout_unavailable"})
       end
