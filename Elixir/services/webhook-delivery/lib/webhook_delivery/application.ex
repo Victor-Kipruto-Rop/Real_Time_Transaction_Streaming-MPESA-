@@ -8,6 +8,7 @@ defmodule PesaGuard.WebhookDelivery.Application do
       [{PesaGuard.WebhookDelivery.Telemetry, []}] ++
         PesaGuard.WebhookDelivery.Persistence.PostgresStore.children() ++
         PesaGuard.WebhookDelivery.OutboxRelay.children() ++
+        PesaGuard.WebhookDelivery.CustomerDeliveryWorker.children() ++
         [PesaGuard.WebhookDelivery.Endpoint]
 
     Supervisor.start_link(children,
