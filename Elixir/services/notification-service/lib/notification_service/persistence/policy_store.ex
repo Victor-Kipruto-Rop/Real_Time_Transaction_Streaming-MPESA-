@@ -58,7 +58,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       transaction_with_event(
         tenant_id,
         "notification-policy.consent_changed",
-        %{"recipient_ref" => recipient_ref, "purpose" => purpose, "granted" => granted, "source" => source},
+        %{"recipient_ref" => recipient_ref, "purpose" => purpose, "granted" => granted, "source" => source, "updated_by" => updated_by},
         fn conn ->
           Postgrex.query!(conn, """
           INSERT INTO telixo_notification_consents
@@ -82,7 +82,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       transaction_with_event(
         tenant_id,
         "notification-policy.preference_changed",
-        %{"recipient_ref" => recipient_ref, "channel" => channel, "enabled" => enabled},
+        %{"recipient_ref" => recipient_ref, "channel" => channel, "enabled" => enabled, "updated_by" => updated_by},
         fn conn ->
           Postgrex.query!(conn, """
           INSERT INTO telixo_notification_preferences
@@ -105,7 +105,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       transaction_with_event(
         tenant_id,
         "notification-policy.recipient_suppressed",
-        %{"recipient_ref" => recipient_ref, "reason_code" => reason_code},
+        %{"recipient_ref" => recipient_ref, "reason_code" => reason_code, "created_by" => created_by},
         fn conn ->
           Postgrex.query!(conn, """
           INSERT INTO telixo_notification_suppressions
@@ -128,7 +128,7 @@ defmodule PesaGuard.NotificationService.Persistence.PolicyStore do
       transaction_with_event(
         tenant_id,
         "notification-policy.recipient_unsuppressed",
-        %{"recipient_ref" => recipient_ref},
+        %{"recipient_ref" => recipient_ref, "changed_by" => changed_by},
         fn conn ->
           Postgrex.query!(conn, """
           DELETE FROM telixo_notification_suppressions
