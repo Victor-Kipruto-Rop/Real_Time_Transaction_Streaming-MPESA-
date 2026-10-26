@@ -43,6 +43,15 @@ if System.get_env("DATABASE_URL") do
                CustomerWebhookStore.enqueue(tenant, subscription.subscription_id, event_id,
                  "reconciliation.completed", payload)
       assert replay.delivery_id == delivery.delivery_id
+      fanout_event_id = "fanout-" <> Base.encode16(:crypto.strong_rand_bytes(8))
+      assert {:ok, fanout_deliveries} =
+               CustomerWebhookStore.enqueue_for_event(tenant, fanout_event_id,
+                 "reconciliation.completed", %{"origin" => "internal-event-relay"})
+      assert length(fanout_deliveries) == 1
+      assert {:ok, fanout_replay} =
+               CustomerWebhookStore.enqueue_for_event(tenant, fanout_event_id,
+                 "reconciliation.completed", %{"origin" => "internal-event-relay"})
+      assert Enum.map(fanout_replay, & &1.delivery_id) == Enum.map(fanout_deliveries, & &1.delivery_id)
       assert {:error, :event_conflict} =
                CustomerWebhookStore.enqueue(tenant, subscription.subscription_id, event_id,
                  "reconciliation.completed", %{"amount" => 151})
@@ -52,6 +61,11 @@ if System.get_env("DATABASE_URL") do
       assert item
       assert item.secret == secret
       assert :ok = CustomerWebhookStore.acknowledge(tenant, delivery.delivery_id, 204)
+      fanout_item = Enum.find(claimed, &(&1.delivery_id == hd(fanout_deliveries).delivery_id))
+      assert fanout_item
+      assert :ok = CustomerWebhookStore.acknowledge(tenant, fanout_item.delivery_id, 204)
+      assert {:ok, history} = CustomerWebhookStore.list_deliveries(tenant, subscription.subscription_id)
+      assert Enum.any?(history, &(&1.delivery_id == delivery.delivery_id))
 
       failed_event_id = "failed-" <> Base.encode16(:crypto.strong_rand_bytes(8))
       assert {:ok, failed_delivery, :created} =
