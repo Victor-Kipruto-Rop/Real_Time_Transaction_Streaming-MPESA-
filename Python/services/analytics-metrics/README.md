@@ -1,4 +1,8 @@
-# Analytics and Metrics Service
+# Analytics Metrics Service
+
+**Priority:** High
+
+**Design responsibility:** Calculate reconciliation rates, transaction trends, discrepancy summaries and operational/business indicators.
 
 **Purpose:** Produce tenant-scoped operational/business aggregates for ingestion, reconciliation, data quality and risk outcomes.
 
