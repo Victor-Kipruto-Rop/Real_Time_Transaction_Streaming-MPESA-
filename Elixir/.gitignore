@@ -1,0 +1,10 @@
+/_build/
+/deps/
+/cover/
+/doc/
+/.elixir_ls/
+/.release/
+/.env
+/.env.*
+!.env.example
+*.ez

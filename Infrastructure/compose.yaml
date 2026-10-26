@@ -1,0 +1,49 @@
+name: pesaguard-infrastructure-local
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pesaguard_dev
+      POSTGRES_PASSWORD: local-only-change-me
+      POSTGRES_DB: pesaguard_dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pesaguard_dev -d pesaguard_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "local-only-change-me"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a local-only-change-me ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  redpanda:
+    image: redpandadata/redpanda:v24.3.7
+    command: ["redpanda", "start", "--mode", "dev-container", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--overprovisioned", "--check=false", "--kafka-addr", "internal://0.0.0.0:9092,host://0.0.0.0:19092", "--advertise-kafka-addr", "internal://redpanda:9092,host://127.0.0.1:19092"]
+    ports:
+      - "127.0.0.1:19092:19092"
+      - "127.0.0.1:19644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  redis-data:
+  redpanda-data:

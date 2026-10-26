@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<modelVersion>4.0.0</modelVersion><groupId>co.pesaguard</groupId><artifactId>pesaguard-java-services</artifactId><version>1.0.0-SNAPSHOT</version><packaging>pom</packaging>
+<name>PesaGuard Java Services</name><properties><java.version>21</java.version><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding><spring-boot.version>3.4.5</spring-boot.version><maven.compiler.version>3.13.0</maven.compiler.version></properties>
+<modules>
+    <module>services/api-gateway</module>
+    <module>services/identity-service</module>
+    <module>services/tenant-service</module>
+    <module>services/merchant-service</module>
+    <module>services/onboarding-kyb-service</module>
+    <module>services/team-permissions-service</module>
+    <module>services/developer-portal-service</module>
+    <module>services/payment-orchestration-service</module>
+    <module>services/transaction-service</module>
+    <module>services/reconciliation-service</module>
+    <module>services/risk-service</module>
+    <module>services/callback-management-service</module>
+    <module>services/webhook-delivery-service</module>
+    <module>services/notification-service</module>
+    <module>services/reporting-service</module>
+    <module>services/audit-service</module>
+    <module>services/document-service</module>
+    <module>services/integration-registry-service</module>
+    <module>services/compliance-service</module>
+    <module>services/operations-service</module>
+</modules>
+<dependencyManagement><dependencies><dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>${spring-boot.version}</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>
+<build><pluginManagement><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>${maven.compiler.version}</version><configuration><release>${maven.compiler.release}</release><parameters>true</parameters></configuration></plugin><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><version>${spring-boot.version}</version></plugin></plugins></pluginManagement></build>
+</project>

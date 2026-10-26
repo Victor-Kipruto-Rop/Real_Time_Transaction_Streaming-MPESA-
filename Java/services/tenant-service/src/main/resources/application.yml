@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: tenant-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+server:
+  port: ${SERVER_PORT:8083}
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
