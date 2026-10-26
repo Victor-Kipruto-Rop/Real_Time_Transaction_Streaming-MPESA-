@@ -9,12 +9,12 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   alias PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore
   alias PesaGuard.WebhookDelivery.Signing
   alias PesaGuard.WebhookDelivery.TargetPolicy
+  alias PesaGuard.WebhookDelivery.PinnedHttpClient
   alias PesaGuard.WebhookDelivery.EndpointCircuitBreaker
 
   @poll_interval_ms 1_000
   @batch_size 5
-  @timeout_ms 5_000
-
+  
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -70,33 +70,11 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       })
 
     result =
-      with :ok <- TargetPolicy.validate(delivery.target_url),
+      with {:ok, target} <- TargetPolicy.resolve_target(delivery.target_url),
            :ok <- EndpointCircuitBreaker.allow?(delivery.target_url),
            {:ok, headers} <- Signing.headers(delivery.delivery_id, delivery.secret, body, timestamp) do
-        request_headers =
-          headers
-          |> Enum.reject(fn {name, _value} -> name == "content-type" end)
-          |> Enum.map(fn {name, value} ->
-            {String.to_charlist(name), String.to_charlist(value)}
-          end)
-
-        request = {String.to_charlist(delivery.target_url), request_headers, ~c"application/json", body}
-
-        try do
-          :httpc.request(:post, request,
-            [
-              timeout: @timeout_ms,
-              connect_timeout: 2_000,
-              autoredirect: false,
-              ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
-            ],
-            body_format: :binary
-          )
-        rescue
-          _ -> {:error, :request_failed}
-        catch
-          :exit, _ -> {:error, :request_failed}
-        end
+        request_headers = Enum.reject(headers, fn {name, _value} -> name == "content-type" end)
+        PinnedHttpClient.post(target, request_headers, body)
       end
 
     case result do
