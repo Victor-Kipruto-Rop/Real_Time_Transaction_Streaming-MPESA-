@@ -78,16 +78,16 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       end
 
     case result do
-      {:ok, {{_version, status, _reason}, _headers, _response}} when status >= 200 and status < 300 ->
+      {:ok, status} when status >= 200 and status < 300 ->
         EndpointCircuitBreaker.record_success(delivery.target_url)
         CustomerWebhookStore.acknowledge(delivery.tenant_id, delivery.delivery_id, status)
 
-      {:ok, {{_version, status, _reason}, _headers, _response}}
+      {:ok, status}
       when status in [408, 425, 429] or status >= 500 ->
         EndpointCircuitBreaker.record_failure(delivery.target_url)
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}")
 
-      {:ok, {{_version, status, _reason}, _headers, _response}} ->
+      {:ok, status} ->
         # A permanent 4xx response proves the endpoint is reachable; do not
         # open the circuit for an application-level rejection.
         EndpointCircuitBreaker.record_success(delivery.target_url)
