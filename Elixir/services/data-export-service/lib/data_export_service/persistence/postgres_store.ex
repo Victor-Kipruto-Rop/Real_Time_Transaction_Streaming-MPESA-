@@ -9,39 +9,6 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
   @connection PesaGuard.DataExportService.Persistence.PostgresConnection
   @service "data-export-service"
 
-  @records_schema """
-  CREATE TABLE IF NOT EXISTS telixo_service_records (
-    record_id TEXT PRIMARY KEY,
-    service_name TEXT NOT NULL,
-    tenant_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    state TEXT NOT NULL,
-    idempotency_key TEXT NOT NULL,
-    payload JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (service_name, tenant_id, kind, idempotency_key)
-  )
-  """
-
-  @outbox_schema """
-  CREATE TABLE IF NOT EXISTS telixo_outbox (
-    event_id TEXT PRIMARY KEY,
-    service_name TEXT NOT NULL,
-    tenant_id TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    payload JSONB NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    attempts INTEGER NOT NULL DEFAULT 0,
-    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    delivered_at TIMESTAMPTZ,
-    lease_expires_at TIMESTAMPTZ
-  )
-  """
-
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -69,29 +36,9 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
            pool_size: 10
          ) do
       {:ok, _pid} ->
-        with {:ok, _} <- Postgrex.query(@connection, @records_schema, []),
-             {:ok, _} <- Postgrex.query(@connection, @outbox_schema, []),
-             {:ok, _} <-
-               Postgrex.query(
-                 @connection,
-                 "CREATE INDEX IF NOT EXISTS telixo_records_tenant_created_idx ON telixo_service_records (service_name, tenant_id, created_at DESC)",
-                 []
-               ),
-             {:ok, _} <-
-               Postgrex.query(
-                 @connection,
-                 "ALTER TABLE telixo_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ",
-                 []
-               ),
-             {:ok, _} <-
-               Postgrex.query(
-                 @connection,
-                 "CREATE INDEX IF NOT EXISTS telixo_outbox_ready_idx ON telixo_outbox (service_name, status, next_attempt_at, created_at)",
-                 []
-               ) do
-          {:ok, %{connected: true}}
-        else
-          {:error, reason} -> {:stop, {:schema_initialization_failed, reason}}
+        case PesaGuard.DataExportService.Persistence.MigrationRunner.run(@connection, @service, :data_export_service) do
+          :ok -> {:ok, %{connected: true}}
+          {:error, reason} -> {:stop, {:migration_failed, reason}}
         end
 
       {:error, reason} ->
