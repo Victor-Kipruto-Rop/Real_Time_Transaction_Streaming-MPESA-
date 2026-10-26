@@ -144,3 +144,23 @@ def test_retry_error_storage_is_bounded(monkeypatch):
         assert len(row.last_error) == 4000
         assert row.status == "pending"
     engine.dispose()
+
+
+
+def test_relay_does_not_persist_raw_exception_text(monkeypatch):
+    monkeypatch.setattr(outbox, "_claim_one", lambda: {
+        "id": 99, "event_key": "sanitized-key", "event_type": "c2b_confirmation",
+        "topic": "topic", "payload": {"event_type": "c2b_confirmation"}, "attempts": 2,
+    })
+    retry_args = []
+
+    class Producer:
+        def publish_event(self, *args, **kwargs):
+            raise RuntimeError("secret=DO_NOT_PERSIST customer=254712345678")
+
+    monkeypatch.setattr(outbox, "_mark_retry", lambda *args: retry_args.append(args))
+    assert outbox.relay_once(Producer()) is True
+    assert len(retry_args) == 1
+    assert "DO_NOT_PERSIST" not in retry_args[0][1]
+    assert "254712345678" not in retry_args[0][1]
+    assert retry_args[0][1] == "RuntimeError: publish failed"
