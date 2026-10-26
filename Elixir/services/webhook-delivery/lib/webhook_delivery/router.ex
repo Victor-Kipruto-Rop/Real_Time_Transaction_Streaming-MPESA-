@@ -24,7 +24,6 @@ defmodule PesaGuard.WebhookDelivery.Router do
 
     post "/events", CustomerWebhooksController, :fanout
     get "/subscriptions", CustomerWebhooksController, :index
-    post "/events", CustomerWebhooksController, :fanout
     post "/subscriptions", CustomerWebhooksController, :create
     post "/subscriptions/:subscription_id/deliveries", CustomerWebhooksController, :enqueue
     get "/subscriptions/:subscription_id/deliveries", CustomerWebhooksController, :history
