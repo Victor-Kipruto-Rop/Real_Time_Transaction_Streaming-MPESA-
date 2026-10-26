@@ -71,3 +71,6 @@ Each service exposes a Domain.Processor used by its authenticated record API:
 - Data Export validates formats, scopes and row limits.
 
 These modules implement deterministic validation and initial scoring contracts. They do not replace provider-specific delivery adapters, actual health probes, export execution, workflow timers, external audit retention, or a model-serving deployment. Those require integration tests and service-specific operational configuration before production use.
+
+
+The outbox relay requires an HTTPS endpoint and verifies TLS certificates before sending bearer credentials. The relay processes bounded batches and reclaims expired leases after a worker crash.

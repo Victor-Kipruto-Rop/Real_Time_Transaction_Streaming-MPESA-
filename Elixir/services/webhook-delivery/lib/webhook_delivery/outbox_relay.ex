@@ -65,7 +65,14 @@ defmodule PesaGuard.WebhookDelivery.OutboxRelay do
 
     result =
       try do
-        :httpc.request(:post, request, [timeout: 5_000, connect_timeout: 2_000],
+        :httpc.request(
+          :post,
+          request,
+          [
+            timeout: 5_000,
+            connect_timeout: 2_000,
+            ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
+          ],
           body_format: :binary
         )
       rescue
