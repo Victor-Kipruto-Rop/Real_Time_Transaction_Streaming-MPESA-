@@ -6,4 +6,14 @@ defmodule PesaGuard.AuditEventService.Domain.ProcessorTest do
     command = %{"actor_type" => "anonymous", "action" => "read", "occurred_at" => "2026-01-01T00:00:00Z"}
     assert {:error, :invalid_actor_type} = Processor.prepare(command)
   end
+
+  test "accepts valid immutable audit attributes" do
+    command = %{
+      "actor_type" => "system",
+      "action" => "organization.verified",
+      "occurred_at" => "2026-01-01T00:00:00Z"
+    }
+
+    assert {:ok, ^command} = Processor.prepare(command)
+  end
 end
