@@ -61,15 +61,24 @@ defmodule PesaGuard.WebhookDelivery.Signing do
              is_integer(tolerance) and tolerance >= 0 do
     with :ok <- validate_secret(secret),
          {timestamp, ""} <- Integer.parse(timestamp_header),
-         true <- abs(now - timestamp) <= tolerance,
-         {:ok, expected} <- sign(secret, timestamp, body),
-         true <- Plug.Crypto.secure_compare(expected, signature_header) do
-      :ok
+         true <- timestamp >= 0 do
+      if abs(now - timestamp) > tolerance do
+        {:error, :timestamp_outside_tolerance}
+      else
+        with {:ok, expected} <- sign(secret, timestamp, body) do
+          if byte_size(expected) == byte_size(signature_header) and
+               Plug.Crypto.secure_compare(expected, signature_header) do
+            :ok
+          else
+            {:error, :invalid_signature}
+          end
+        end
+      end
     else
-      false -> {:error, :timestamp_outside_tolerance}
+      {:error, :invalid_secret} = error -> error
       :error -> {:error, :invalid_timestamp}
       {_timestamp, _rest} -> {:error, :invalid_timestamp}
-      {:error, :invalid_secret} = error -> error
+      false -> {:error, :invalid_timestamp}
       {:error, _reason} -> {:error, :invalid_signature}
     end
   end
