@@ -54,7 +54,11 @@ defmodule PesaGuard.AuditEventService.AdminController do
     roles = Map.get(claims, "roles", [])
     actor = tenant.subject
     reason = conn |> Plug.Conn.get_req_header("x-audit-reason") |> List.first()
-    request_id = conn |> Plug.Conn.get_req_header("x-request-id") |> List.first() || random_id()
+    supplied_request_id = conn |> Plug.Conn.get_req_header("x-request-id") |> List.first()
+    request_id =
+      if is_binary(supplied_request_id) and byte_size(supplied_request_id) in 1..200,
+        do: supplied_request_id,
+        else: random_id()
 
     cond do
       not is_list(roles) or Enum.empty?(roles) or
