@@ -1,5 +1,9 @@
 # Transaction Ingestion Service
 
+**Priority:** Critical
+
+**Design responsibility:** Consume durably accepted events and approved imports, normalize provider records, deduplicate processing and publish versioned internal events.
+
 **Role:** consume durably accepted provider events and approved imports, normalize records into versioned internal events, enforce idempotency and publish recoverable outcomes.
 
 ## Boundaries
