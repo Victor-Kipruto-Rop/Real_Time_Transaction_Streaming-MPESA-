@@ -131,7 +131,7 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
                   kind,
                   state,
                   idempotency_key,
-                  payload
+                  Jason.encode!(payload)
                 ]).rows do
              [row] ->
                record = decode_row(row)
@@ -152,7 +152,7 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
                Postgrex.query!(
                  conn,
                  "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
-                 [record_id, @service, tenant_id, event["event_type"], event]
+                 [record_id, @service, tenant_id, event["event_type"], Jason.encode!(event)]
                )
 
                {:ok, record, :created}
