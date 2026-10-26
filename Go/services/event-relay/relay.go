@@ -119,7 +119,7 @@ FOR UPDATE SKIP LOCKED`, r.BatchSize)
 	}
 	for i := range events {
 		_, err = tx.ExecContext(ctx, `UPDATE go_event_outbox
-SET locked_by=$2, locked_until=NOW() + INTERVAL '60 seconds', attempts=attempts+1
+SET locked_by=$2, locked_until=NOW() + INTERVAL '10 minutes', attempts=attempts+1
 WHERE id=$1`, events[i].ID, r.InstanceID)
 		if err != nil {
 			return nil, err
