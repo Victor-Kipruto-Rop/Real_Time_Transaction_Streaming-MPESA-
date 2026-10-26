@@ -15,10 +15,17 @@ defmodule PesaGuard.WebhookDelivery.OutboxReplayController do
         conn |> put_status(:forbidden) |> json(%{error: "outbox_replay_forbidden"})
 
       String.length(String.trim(reason)) not in 10..500 ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "replay_reason_must_be_10_to_500_characters"})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "replay_reason_must_be_10_to_500_characters"})
 
       true ->
-        case PostgresStore.replay_dead_letter(context.tenant_id, event_id, context.subject, String.trim(reason)) do
+        case PostgresStore.replay_dead_letter(
+               context.tenant_id,
+               event_id,
+               context.subject,
+               String.trim(reason)
+             ) do
           :ok ->
             json(conn, %{data: %{event_id: event_id, status: "pending"}, replay_accepted: true})
 
