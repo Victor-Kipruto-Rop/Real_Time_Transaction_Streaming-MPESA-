@@ -1,5 +1,9 @@
 # Risk Scoring Service
 
+**Priority:** High
+
+**Design responsibility:** Generate explainable risk scores and anomaly signals using approved, versioned features, rules and models.
+
 ## Purpose
 Produce explainable risk/anomaly signals for transaction and reconciliation records using approved, versioned features and rules/models. This service does not execute financial actions.
 
