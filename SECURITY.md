@@ -44,7 +44,7 @@ This section tracks known gaps against the checklist below, so the policy reflec
 | Webhook idempotency (Daraja C2B callback) | Open | Duplicate `TransID` deliveries not yet deduplicated at DB or Kafka layer |
 | Webhook input validation | Open | Payload schema/type/source validation not yet enforced |
 | Pipeline alerting (Kafka lag, consumer crashes, dbt failures) | Open | Prometheus/Grafana dashboards exist; no active alert routing yet |
-| Backup/restore verification | Open | `backups/` exists; restore path untested |
+| Backup/restore verification | Open | `Infrastructure/archive/backups/` exists; restore path untested |
 | Secret scanning in CI | Not started | TruffleHog/GitGuardian not yet wired into `.github/workflows` |
 | Dependency vulnerability scanning | Not started | `safety`/`Snyk` not yet run in CI |
 
