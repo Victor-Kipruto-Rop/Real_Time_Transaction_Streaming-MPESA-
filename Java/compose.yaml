@@ -1,0 +1,263 @@
+name: pesaguard-java
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api-gateway
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8100:8080"
+    restart: unless-stopped
+  identity-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: identity-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8101:8080"
+    restart: unless-stopped
+  tenant-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: tenant-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8102:8080"
+    restart: unless-stopped
+  merchant-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: merchant-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8103:8080"
+    restart: unless-stopped
+  onboarding-kyb-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: onboarding-kyb-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8104:8080"
+    restart: unless-stopped
+  team-permissions-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: team-permissions-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8105:8080"
+    restart: unless-stopped
+  developer-portal-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: developer-portal-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8106:8080"
+    restart: unless-stopped
+  payment-orchestration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payment-orchestration-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8107:8080"
+    restart: unless-stopped
+  transaction-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: transaction-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8108:8080"
+    restart: unless-stopped
+  reconciliation-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: reconciliation-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8109:8080"
+    restart: unless-stopped
+  risk-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: risk-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8110:8080"
+    restart: unless-stopped
+  callback-management-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: callback-management-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8111:8080"
+    restart: unless-stopped
+  webhook-delivery-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: webhook-delivery-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8112:8080"
+    restart: unless-stopped
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8113:8080"
+    restart: unless-stopped
+  reporting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: reporting-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8114:8080"
+    restart: unless-stopped
+  audit-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: audit-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8115:8080"
+    restart: unless-stopped
+  document-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: document-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8116:8080"
+    restart: unless-stopped
+  integration-registry-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: integration-registry-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8117:8080"
+    restart: unless-stopped
+  compliance-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: compliance-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8118:8080"
+    restart: unless-stopped
+  operations-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: operations-service
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "127.0.0.1:8119:8080"
+    restart: unless-stopped
+

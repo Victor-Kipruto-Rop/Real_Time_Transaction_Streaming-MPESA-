@@ -2,6 +2,17 @@
 
 Java 21 / Spring Boot workspace for PesaGuard's independently deployable business services. This is a structured scaffold, not a claim that every workflow is production-implemented.
 
+## Docker
+
+Build and run all 20 Java service containers locally (ports 8100–8119):
+
+```bash
+docker compose -f Java/compose.yaml up -d --build
+docker compose -f Java/compose.yaml ps
+```
+
+For the combined local platform, use `docker compose -f compose.yaml up -d --build` from the repository root. See [`DOCKER_PLATFORM.md`](../DOCKER_PLATFORM.md). Containers are scaffolds; successful startup does not establish production readiness.
+
 ## Build
 
 Requires JDK 21 and Maven 3.9+.
