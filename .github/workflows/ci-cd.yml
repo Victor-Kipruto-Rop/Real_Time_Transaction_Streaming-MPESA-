@@ -1,5 +1,8 @@
 name: CI/CD Pipeline - M-Pesa Streaming
 
+env:
+  PYTHONPATH: Python
+
 on:
   push:
     branches: [ main, develop ]
