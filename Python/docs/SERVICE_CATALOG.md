@@ -2,18 +2,18 @@
 
 TELIXO Python has exactly ten planned service boundaries. This catalog defines ownership before implementation. It does not assert that each service is already implemented or deployable.
 
-| # | Service | Type | Primary responsibility | Main dependency |
-|---:|---|---|---|---|
-| 1 | `transaction-ingestion` | Core service | Consume provider events only after the configured Java boundary has durably accepted them, and normalize approved imports into canonical internal event envelopes. | Kafka/Redpanda |
-| 2 | `reconciliation-engine` | Core service | Deterministically match normalized provider records to authorized canonical ledger records and classify discrepancies with explainable evidence. | Java ledger API/read model |
-| 3 | `data-quality` | Core service | Apply versioned schema, semantic and cross-record rules, record quality findings, and quarantine invalid records for controlled recovery. | Root schemas/contracts |
-| 4 | `risk-scoring` | Core service | Generate explainable risk/anomaly signals from approved transaction features using versioned rules and models. | Feature Engineering |
-| 5 | `stream-processing` | Processing/analytics service | Run scalable continuous transformations and event-time aggregations over durable internal topics; coordinate stream checkpoints and replay. | Kafka/Redpanda |
-| 6 | `batch-processing` | Processing/analytics service | Execute scheduled imports, historical backfills, reconciliation reruns and bounded data repair jobs with resumable checkpoints. | Scheduler/orchestrator (existing platform) |
-| 7 | `analytics-metrics` | Processing/analytics service | Produce tenant-scoped operational and business aggregates about ingestion, reconciliation, data quality and risk outcomes. | Read-only analytical data source |
-| 8 | `feature-engineering` | Processing/analytics service | Build validated, versioned features for risk scoring and model evaluation from approved transaction and aggregate data. | Curated analytical source |
-| 9 | `data-enrichment` | Processing/analytics service | Enrich approved records with authorized reference data such as merchant metadata, classification mappings and configured business reference lists. | Java-owned merchant/tenant APIs |
-| 10 | `model-evaluation-monitoring` | Processing/analytics service | Evaluate model versions and monitor drift, calibration, latency, missing features and outcome quality without controlling transaction processing. | Risk-scoring metadata/events |
+| # | Service | Priority | Type | Primary responsibility | Main dependency |
+|---:|---|---|---|---|---|
+| 1 | `transaction-ingestion` | Critical | Core | Consume durably accepted events/imports, normalize provider records and deduplicate processing. | Kafka/Redpanda |
+| 2 | `reconciliation-engine` | Critical | Core | Match normalized provider records to the authorized ledger interface and classify discrepancies with explainable evidence. | Java ledger API/read model |
+| 3 | `data-quality` | Critical | Core | Validate schemas, required fields, timestamps, amounts, currency and record consistency; quarantine invalid records. | Root schemas/contracts |
+| 4 | `risk-scoring` | High | Core | Generate explainable risk scores/anomaly signals using approved, versioned features, rules and models. | Feature Engineering |
+| 5 | `stream-processing` | High | Processing | Process transaction events and analytical signals with checkpointing and replay. | Kafka/Redpanda |
+| 6 | `batch-processing` | High | Processing | Run scheduled imports, historical reconciliation, backfills and large-volume jobs. | Scheduler/orchestrator |
+| 7 | `analytics-metrics` | High | Analytics | Calculate reconciliation rates, transaction trends, discrepancy summaries and operational/business indicators. | Read-only analytical source |
+| 8 | `feature-engineering` | High | ML data | Prepare validated, versioned, point-in-time-correct features for risk models and anomaly detection. | Curated analytical source |
+| 9 | `data-enrichment` | Medium | Data preparation | Normalize/enrich using approved reference data and provenance; never invent missing transaction facts. | Java-owned merchant APIs |
+| 10 | `model-evaluation-monitoring` | High | ML evaluation | Evaluate model quality, detect drift, track false positives/negatives and support controlled model-version changes. | Risk-scoring metadata/events |
 
 ## Global rules
 
