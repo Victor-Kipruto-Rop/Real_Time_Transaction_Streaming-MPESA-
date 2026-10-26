@@ -18,7 +18,7 @@ Production requires DATABASE_URL, JWT_SECRET (at least 32 bytes), EVENT_RELAY_UR
 - The API currently exposes a shared generic record resource. Service-specific business endpoints, workers, timers, provider adapters, and lifecycle orchestration are incomplete.
 - The outbox relay assumes the receiver durably accepts events before returning 2xx and deduplicates by Idempotency-Key. End-to-end receiver integration tests are still required.
 - Add asymmetric JWT/JWKS verification or a reviewed key-rotation design, rate limits, strict request-size limits, per-service authorization scopes, audit integration, and security review.
-- Replace bootstrap DDL with versioned migrations and least-privilege DB roles; test pooling, connection recovery, backups, restores, retention, and schema upgrades.
+- Versioned SQL migrations now run at service startup with per-service migration versions and SHA-256 checksums; applied migration files are immutable. Least-privilege DB roles, connection recovery, backups/restores, retention, and upgrade/rollback procedures still require deployment-level validation.
 - Add integration/fault-injection tests for tenant isolation, concurrent idempotency, conflicting retries, process crashes, expired leases, relay outages, permanent errors, dead-letter replay, and data recovery.
 - The GitHub Actions runs currently report failures, but the connected tooling has not exposed their job steps/log artifacts. Compilation and tests are therefore not verified.
 
