@@ -57,6 +57,21 @@ services:
     path: Elixir/services
     role: concurrent-delivery-workflows-and-operations
     status: scaffold
+  - id: go-event-relay
+    runtime: go
+    path: Go/services/event-relay
+    role: publish-go-owned-transactional-outbox-to-versioned-broker
+    status: implemented-starter-not-wired-to-existing-outbox
+  - id: go-quota-engine
+    runtime: go
+    path: Go/services/quota-engine
+    role: internal-atomic-tenant-and-environment-aware-api-quota-checks
+    status: implemented-starter-requires-gateway-auth-integration
+  - id: go-infrastructure-monitor
+    runtime: go
+    path: Go/services/infrastructure-monitor
+    role: configured-dependency-health-checks-and-protected-snapshot
+    status: implemented-starter-not-connected-to-public-status-site
 dependencies:
   - id: postgres
     role: durable-service-owned-records
