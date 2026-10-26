@@ -68,8 +68,11 @@ defmodule PesaGuard.NotificationService.RecordsController do
       {:error, :not_found} ->
         conn |> put_status(:not_found) |> json(%{error: "not_found"})
 
-      {:error, :unavailable} ->
-        conn |> put_status(:service_unavailable) |> json(%{error: "persistence_unavailable"})
+      {:error, reason} when reason in [:consent_record_unavailable, :consent_not_granted, :consent_purpose_missing, :channel_preference_disabled, :recipient_suppressed] ->
+        conn |> put_status(:forbidden) |> json(%{error: "notification_policy_denied", reason: Atom.to_string(reason)})
+
+      {:error, reason} when reason in [:policy_store_unavailable, :policy_record_unavailable, :unavailable] ->
+        conn |> put_status(:service_unavailable) |> json(%{error: "notification_policy_or_persistence_unavailable"})
 
       {:error, :conflict} ->
         conn |> put_status(:conflict) |> json(%{error: "state_conflict"})
