@@ -1,0 +1,40 @@
+defmodule PesaGuard.NotificationService.Domain.Service do
+  @moduledoc "notification-service command validation and lifecycle rules."
+
+  @required_fields ["event_id", "tenant_id", "recipient_ref", "channel", "template_id"]
+  @terminal_states ["sent", "permanently_failed", "suppressed"]
+  @states ["queued", "sending", "sent", "retryable_failure", "permanently_failed", "suppressed"]
+  @transitions %{
+    "queued" => ["sending", "suppressed"],
+    "sending" => ["sent", "retryable_failure", "permanently_failed"],
+    "sent" => [],
+    "retryable_failure" => ["sending", "permanently_failed"],
+    "permanently_failed" => [],
+    "suppressed" => []
+  }
+
+  @spec validate_command(term()) :: {:ok, map()} | {:error, {:missing_fields, [binary()]}}
+  def validate_command(command) when is_map(command) do
+    missing =
+      Enum.filter(@required_fields, fn key ->
+        blank?(Map.get(command, key))
+      end)
+
+    if missing == [], do: {:ok, command}, else: {:error, {:missing_fields, missing}}
+  end
+
+  def validate_command(_), do: {:error, {:missing_fields, @required_fields}}
+  def terminal?(state) when is_binary(state), do: state in @terminal_states
+  def terminal?(_), do: false
+
+  def transition_allowed?(from, to) when is_binary(from) and is_binary(to) do
+    to in Map.get(@transitions, from, [])
+  end
+
+  def transition_allowed?(_, _), do: false
+  def initial_state, do: hd(@states)
+
+  defp blank?(nil), do: true
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(_), do: false
+end

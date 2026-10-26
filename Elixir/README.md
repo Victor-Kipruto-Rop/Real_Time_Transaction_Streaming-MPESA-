@@ -1,4 +1,4 @@
-# PesaGuard Elixir / Phoenix Services
+# TELIXO Elixir / Phoenix Services
 
 Independent Elixir/OTP and Phoenix applications for concurrency-heavy, asynchronous and workflow-oriented PesaGuard workloads. Each service is a standalone Mix project under `services/` (not a single umbrella release), so it can be tested, built, configured and deployed independently.
 
@@ -45,3 +45,43 @@ Use the root `compose.yaml` to combine Elixir with the shared dependencies and o
 ## Security and production gates
 
 The services provide initial Phoenix endpoints, configuration hooks and smoke tests; they are **not automatically production-ready**. Before exposure, implement domain handlers, authorization, event/database adapters, migrations where needed, idempotency, bounded retries, durable dead-letter/replay, observability, rate limits, resource budgets, dependency scanning, SBOM, backup/restore and runbooks. Set production secrets securely and restrict management endpoints. Never log API keys, access tokens, PINs, callback secrets or sensitive payloads.
+
+
+## Authenticated API and durable outbox
+
+Each service exposes liveness at `GET /health`, database-backed readiness at `GET /ready`, and authenticated tenant-scoped record endpoints under `/v1/records`. API requests require a bearer JWT signed with HS256. Claims must include `tenant_id`, `sub`, `iss`, `aud`, and `exp`; the default issuer and audience are `telixo`. Set `JWT_SECRET` to at least 32 bytes and align `JWT_ISSUER` with the trusted issuer.
+
+Record creation and state changes write an event to PostgreSQL's transactional outbox in the same transaction. The outbox relay delivers events at least once to the configured `EVENT_RELAY_URL` using `EVENT_RELAY_TOKEN`; the receiver must durably accept events and deduplicate by the `Idempotency-Key` header. Delivery attempts are leased, retried with bounded backoff, and dead-lettered after repeated or permanent failures.
+
+The Compose stack now includes a PostgreSQL container. Before starting it, provide `ELIXIR_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `JWT_SECRET`, `EVENT_RELAY_URL`, and `EVENT_RELAY_TOKEN` in the environment. Never use development placeholders for production secrets. The shared record API and outbox are a common foundation; service-specific business handlers and external-provider adapters still require service-level integration tests.
+
+
+## Service-specific validation modules
+
+Each service exposes a Domain.Processor used by its authenticated record API:
+- Webhook Delivery rejects non-HTTPS destinations, URL credentials, non-standard ports and literal IP hosts. Network egress controls are still required to prevent DNS-based SSRF.
+- Notification Service validates supported channels and recipient references.
+- Workflow Orchestrator validates workflow identifiers and positive integer versions.
+- Audit Event Service validates actor types, action length and ISO-8601 timestamps.
+- Compliance Workflow validates evidence reference lists and duplicate evidence references.
+- Fraud Detection produces a bounded, explainable rule score from versioned features; it does not initiate or reverse payments.
+- Risk Engine aggregates normalized signals into a low/medium/high assessment and explanation list; it does not perform payment actions.
+- Integration Health validates check types and bounded timeouts.
+- Incident Management validates severity, summary length and timestamps.
+- Data Export validates formats, scopes and row limits.
+
+These modules implement deterministic validation and initial scoring contracts. They do not replace provider-specific delivery adapters, actual health probes, export execution, workflow timers, external audit retention, or a model-serving deployment. Those require integration tests and service-specific operational configuration before production use.
+
+
+The outbox relay requires an HTTPS endpoint and verifies TLS certificates before sending bearer credentials. The relay processes bounded batches and reclaims expired leases after a worker crash.
+
+
+## Release gate
+
+Before promotion, run `mix format --check-formatted`, `MIX_ENV=test mix compile --warnings-as-errors`, and `mix test` inside every service directory. Then run PostgreSQL-backed integration tests for duplicate idempotency keys, conflicting payloads, tenant isolation, concurrent transitions, outbox lease expiry, retry exhaustion, permanent HTTP failures, and relay crash recovery. The current unit suite does not replace these integration tests.
+
+
+Deployment passwords used in DATABASE_URL should be URL-safe (letters, digits, and hyphens are recommended) unless the connection string is percent-encoded correctly.
+
+
+Implementation note: the current pull request is intentionally a draft. Do not promote or deploy until the listed service-specific gaps are closed and the complete CI matrix passes.

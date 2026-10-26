@@ -1,19 +1,18 @@
 defmodule PesaGuard.ComplianceWorkflowService.Application do
-  @moduledoc """
-  OTP application for Compliance Workflow Service.
-
-  Compliance case routing, evidence requests, retention and policy workflow coordination; no fabricated verification results.
-  """
-
+  @moduledoc "OTP application for compliance-workflow-service."
   use Application
 
   @impl true
   def start(_type, _args) do
-    children = [
-      PesaGuard.ComplianceWorkflowService.Endpoint,
-      {PesaGuard.ComplianceWorkflowService.Telemetry, []}
-    ]
+    children =
+      [{PesaGuard.ComplianceWorkflowService.Telemetry, []}] ++
+        PesaGuard.ComplianceWorkflowService.Persistence.PostgresStore.children() ++
+        PesaGuard.ComplianceWorkflowService.OutboxRelay.children() ++
+        [PesaGuard.ComplianceWorkflowService.Endpoint]
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: PesaGuard.ComplianceWorkflowService.Supervisor)
+    Supervisor.start_link(children,
+      strategy: :one_for_one,
+      name: PesaGuard.ComplianceWorkflowService.Supervisor
+    )
   end
 end

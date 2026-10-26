@@ -1,13 +1,21 @@
 defmodule PesaGuard.WorkflowOrchestrator.HealthController do
   use Phoenix.Controller, formats: [:json]
-  import Plug.Conn
+
+  alias PesaGuard.WorkflowOrchestrator.Persistence.PostgresStore
 
   def show(conn, _params) do
-    json(conn, %{status: "ok", service: "workflow-orchestrator", version: "0.1.0"})
+    json(conn, %{status: "ok", service: "workflow-orchestrator", version: "0.2.0"})
   end
 
   def ready(conn, _params) do
-    # Add dependency checks before using readiness to gate production traffic.
-    json(conn, %{status: "ready", service: "workflow-orchestrator", checks: %{application: "ok"}})
+    case PostgresStore.ready?() do
+      :ok ->
+        json(conn, %{status: "ready", service: "workflow-orchestrator", checks: %{database: "ok"}})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{status: "not_ready", service: "workflow-orchestrator", checks: %{database: "unavailable"}})
+    end
   end
 end
