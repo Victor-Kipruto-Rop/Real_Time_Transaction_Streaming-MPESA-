@@ -1,0 +1,47 @@
+name: pesaguard-go
+services:
+  event-relay:
+    build:
+      context: services/event-relay
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8081"
+      DATABASE_URL: "${GO_DATABASE_URL:-postgres://pesaguard_dev:local-only-change-me@postgres:5432/pesaguard_dev?sslmode=disable}"
+      KAFKA_BROKERS: "${KAFKA_BROKERS:-redpanda:9092}"
+      REDIS_URL: "${REDIS_URL:-redis://:local-only-change-me@redis:6379/0}"
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:-local-only-change-me-not-for-production}"
+      CHECK_TARGETS: "${CHECK_TARGETS:-api=http://python-ingestion:8080/health}"
+    ports:
+      - "127.0.0.1:8300:8081"
+    restart: unless-stopped
+  quota-engine:
+    build:
+      context: services/quota-engine
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8082"
+      DATABASE_URL: "${GO_DATABASE_URL:-postgres://pesaguard_dev:local-only-change-me@postgres:5432/pesaguard_dev?sslmode=disable}"
+      KAFKA_BROKERS: "${KAFKA_BROKERS:-redpanda:9092}"
+      REDIS_ADDR: "${REDIS_ADDR:-redis:6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-only-change-me}"
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:-local-only-change-me-not-for-production}"
+      CHECK_TARGETS: "${CHECK_TARGETS:-api=http://python-ingestion:8080/health}"
+    ports:
+      - "127.0.0.1:8301:8082"
+    restart: unless-stopped
+  infrastructure-monitor:
+    build:
+      context: services/infrastructure-monitor
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8083"
+      DATABASE_URL: "${GO_DATABASE_URL:-postgres://pesaguard_dev:local-only-change-me@postgres:5432/pesaguard_dev?sslmode=disable}"
+      KAFKA_BROKERS: "${KAFKA_BROKERS:-redpanda:9092}"
+      REDIS_ADDR: "${REDIS_ADDR:-redis:6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-only-change-me}"
+      INTERNAL_TOKEN: "${INTERNAL_TOKEN:-local-only-change-me-not-for-production}"
+      CHECK_TARGETS: "${CHECK_TARGETS:-api=http://python-ingestion:8080/health}"
+    ports:
+      - "127.0.0.1:8302:8083"
+    restart: unless-stopped
+

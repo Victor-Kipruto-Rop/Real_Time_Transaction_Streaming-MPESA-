@@ -1,0 +1,51 @@
+name: pesaguard-frontends
+services:
+  developer-platform:
+    build:
+      context: developer-platform
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8401:8080"
+    restart: unless-stopped
+  tenant-dashboard:
+    build:
+      context: tenant-dashboard
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8402:8080"
+    restart: unless-stopped
+  admin-dashboard:
+    build:
+      context: admin-dashboard
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8403:8080"
+    restart: unless-stopped
+  public-website:
+    build:
+      context: public-website
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8404:8080"
+    restart: unless-stopped
+  status-website:
+    build:
+      context: status-website
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8405:8080"
+    restart: unless-stopped
+  docs-website:
+    build:
+      context: docs-website
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-http://127.0.0.1:8100}"
+    ports:
+      - "127.0.0.1:8406:8080"
+    restart: unless-stopped
+

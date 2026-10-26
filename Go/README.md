@@ -8,6 +8,17 @@ Go services here are infrastructure components, not a second transaction ledger.
 - `services/quota-engine`: Redis-backed atomic fixed-window quota check for authenticated internal gateway calls. Tenant/environment/key/route values must be derived by the trusted gateway after authentication, never accepted directly from browsers.
 - `services/infrastructure-monitor`: configurable HTTP dependency checks and a protected read-only health snapshot. Configure targets explicitly; never expose internal target details publicly without an API-side filter.
 
+## Docker
+
+Build and start the three Go infrastructure containers locally (ports 8300–8302):
+
+```sh
+docker compose -f Go/compose.yaml up -d --build
+docker compose -f Go/compose.yaml ps
+```
+
+For the combined platform use `docker compose -f compose.yaml up -d --build` from the repository root. See [`DOCKER_PLATFORM.md`](../DOCKER_PLATFORM.md). The outbox migration must be applied before the relay can work; the quota engine is not yet connected to the gateway.
+
 ## Local development
 
 Run commands from the `Go/` directory with Go 1.23+:

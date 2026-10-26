@@ -3,7 +3,7 @@ import Config
 config :workflow_orchestrator, PesaGuard.WorkflowOrchestrator.Endpoint,
   url: [host: System.get_env("PHX_HOST", "localhost"), scheme: "http"],
   http: [ip: {0, 0, 0, 0}, port: String.to_integer(System.get_env("PORT", "4105"))],
-  secret_key_base: String.duplicate("dev-only-key-", 8),
+  secret_key_base: System.get_env("SECRET_KEY_BASE", String.duplicate("dev-only-key-", 8)),
   server: config_env() == :prod
 
 config :workflow_orchestrator, :environment, config_env()

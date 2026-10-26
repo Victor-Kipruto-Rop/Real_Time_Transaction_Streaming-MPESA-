@@ -1,0 +1,54 @@
+name: Docker platform configuration
+
+on:
+  pull_request:
+    paths:
+      - "compose.yaml"
+      - "*-compose.yaml"
+      - "Infrastructure/compose.yaml"
+      - "Java/**"
+      - "Elixir/**"
+      - "Go/**"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/docker-platform-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "compose.yaml"
+      - "*-compose.yaml"
+      - "Infrastructure/compose.yaml"
+      - "Java/**"
+      - "Elixir/**"
+      - "Go/**"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/docker-platform-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Docker Compose version
+        run: docker compose version
+      - name: Validate combined stack
+        run: |
+          docker compose -f compose.yaml config > /tmp/pesaguard-compose-resolved.yaml
+          test -s /tmp/pesaguard-compose-resolved.yaml
+          echo "Combined Compose configuration resolved."
+      - name: Validate shared dependencies
+        run: docker compose -f Infrastructure/compose.yaml config > /dev/null
+      - name: Validate Python ingestion
+        run: docker compose -f python-compose.yaml config > /dev/null
+      - name: Validate Java platform
+        run: docker compose -f Java/compose.yaml config > /dev/null
+      - name: Validate Elixir platform
+        run: docker compose -f Elixir/compose.yaml config > /dev/null
+      - name: Validate Go platform
+        run: docker compose -f Go/compose.yaml config > /dev/null
+      - name: Validate frontend platform
+        run: docker compose -f frontend/compose.yaml config > /dev/null

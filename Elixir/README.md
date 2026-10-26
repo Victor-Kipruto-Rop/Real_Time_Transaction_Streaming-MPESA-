@@ -2,6 +2,17 @@
 
 Independent Elixir/OTP and Phoenix applications for concurrency-heavy, asynchronous and workflow-oriented PesaGuard workloads. Each service is a standalone Mix project under `services/` (not a single umbrella release), so it can be tested, built, configured and deployed independently.
 
+## Docker
+
+Build and start the ten standalone service containers locally (ports 8200–8209):
+
+```bash
+docker compose -f Elixir/compose.yaml up -d --build
+docker compose -f Elixir/compose.yaml ps
+```
+
+Use the root `compose.yaml` to combine Elixir with the shared dependencies and other PesaGuard platforms. See [`DOCKER_PLATFORM.md`](../DOCKER_PLATFORM.md). Development credentials are not production secrets, and endpoint/integration behavior still needs service-level validation.
+
 ## Requirements
 
 - Elixir 1.17+ and Erlang/OTP 27+ recommended.
