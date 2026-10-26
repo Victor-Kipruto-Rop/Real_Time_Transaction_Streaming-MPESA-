@@ -37,7 +37,8 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
     last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    delivered_at TIMESTAMPTZ
+    delivered_at TIMESTAMPTZ,
+    lease_expires_at TIMESTAMPTZ
   )
   """
 
@@ -46,7 +47,7 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
   end
 
   def children do
-    environment = Application.get_env(:webhook_delivery, :environment)
+    environment = Application.get_env(:fraud_detection, :environment)
 
     case {System.get_env("DATABASE_URL"), environment} do
       {url, _} when is_binary(url) and url != "" ->
@@ -74,6 +75,12 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
                Postgrex.query(
                  @connection,
                  "CREATE INDEX IF NOT EXISTS telixo_records_tenant_created_idx ON telixo_service_records (service_name, tenant_id, created_at DESC)",
+                 []
+               ),
+             {:ok, _} <-
+               Postgrex.query(
+                 @connection,
+                 "ALTER TABLE telixo_outbox ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ",
                  []
                ),
              {:ok, _} <-
@@ -271,13 +278,14 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
     WITH candidates AS (
       SELECT event_id
       FROM telixo_outbox
-      WHERE service_name = $1 AND status = 'pending' AND next_attempt_at <= now()
+      WHERE service_name = $1 AND ((status = 'pending' AND next_attempt_at <= now()) OR (status = 'in_progress' AND lease_expires_at < now()))
       ORDER BY created_at
       LIMIT $2
       FOR UPDATE SKIP LOCKED
     )
     UPDATE telixo_outbox AS outbox
-    SET status = 'in_progress', attempts = outbox.attempts + 1, updated_at = now()
+    SET status = 'in_progress', attempts = outbox.attempts + 1,
+        lease_expires_at = now() + interval '60 seconds', updated_at = now()
     FROM candidates
     WHERE outbox.event_id = candidates.event_id
     RETURNING outbox.event_id, outbox.tenant_id, outbox.event_type,
@@ -296,7 +304,8 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
       when is_binary(tenant_id) and is_binary(event_id) do
     sql = """
     UPDATE telixo_outbox
-    SET status = 'delivered', delivered_at = now(), updated_at = now(), last_error = NULL
+    SET status = 'delivered', delivered_at = now(), updated_at = now(), last_error = NULL,
+        lease_expires_at = NULL
     WHERE service_name = $1 AND tenant_id = $2 AND event_id = $3 AND status = 'in_progress'
     """
 
@@ -309,14 +318,15 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
     _ -> {:error, :unavailable}
   end
 
-  def fail_outbox(tenant_id, event_id, retry_at_unix, reason)
+  def fail_outbox(tenant_id, event_id, retry_at_unix, reason, permanent? \\ false)
       when is_binary(tenant_id) and is_binary(event_id) and is_integer(retry_at_unix) and
-             is_binary(reason) do
+             is_binary(reason) and is_boolean(permanent?) do
     sql = """
     UPDATE telixo_outbox
-    SET status = CASE WHEN attempts >= 8 THEN 'dead_lettered' ELSE 'pending' END,
+    SET status = CASE WHEN attempts >= 8 OR $6 THEN 'dead_lettered' ELSE 'pending' END,
         next_attempt_at = to_timestamp($4),
         last_error = left($5, 1000),
+        lease_expires_at = NULL,
         updated_at = now()
     WHERE service_name = $1 AND tenant_id = $2 AND event_id = $3 AND status = 'in_progress'
     """
@@ -326,7 +336,8 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
            tenant_id,
            event_id,
            retry_at_unix,
-           reason
+           reason,
+           permanent?
          ]) do
       {:ok, %{num_rows: 1}} -> :ok
       {:ok, %{num_rows: 0}} -> {:error, :conflict}

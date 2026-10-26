@@ -7,6 +7,7 @@ defmodule PesaGuard.IntegrationHealthService.Application do
     children =
       [{PesaGuard.IntegrationHealthService.Telemetry, []}] ++
         PesaGuard.IntegrationHealthService.Persistence.PostgresStore.children() ++
+        PesaGuard.IntegrationHealthService.OutboxRelay.children() ++
         [PesaGuard.IntegrationHealthService.Endpoint]
 
     Supervisor.start_link(children,

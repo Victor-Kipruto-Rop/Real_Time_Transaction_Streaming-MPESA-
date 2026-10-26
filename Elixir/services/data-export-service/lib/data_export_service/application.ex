@@ -7,6 +7,7 @@ defmodule PesaGuard.DataExportService.Application do
     children =
       [{PesaGuard.DataExportService.Telemetry, []}] ++
         PesaGuard.DataExportService.Persistence.PostgresStore.children() ++
+        PesaGuard.DataExportService.OutboxRelay.children() ++
         [PesaGuard.DataExportService.Endpoint]
 
     Supervisor.start_link(children,

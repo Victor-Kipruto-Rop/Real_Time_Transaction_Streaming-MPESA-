@@ -7,6 +7,7 @@ defmodule PesaGuard.ComplianceWorkflowService.Application do
     children =
       [{PesaGuard.ComplianceWorkflowService.Telemetry, []}] ++
         PesaGuard.ComplianceWorkflowService.Persistence.PostgresStore.children() ++
+        PesaGuard.ComplianceWorkflowService.OutboxRelay.children() ++
         [PesaGuard.ComplianceWorkflowService.Endpoint]
 
     Supervisor.start_link(children,

@@ -7,6 +7,7 @@ defmodule PesaGuard.AuditEventService.Application do
     children =
       [{PesaGuard.AuditEventService.Telemetry, []}] ++
         PesaGuard.AuditEventService.Persistence.PostgresStore.children() ++
+        PesaGuard.AuditEventService.OutboxRelay.children() ++
         [PesaGuard.AuditEventService.Endpoint]
 
     Supervisor.start_link(children,

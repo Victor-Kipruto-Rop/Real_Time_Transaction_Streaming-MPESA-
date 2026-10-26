@@ -7,6 +7,7 @@ defmodule PesaGuard.NotificationService.Application do
     children =
       [{PesaGuard.NotificationService.Telemetry, []}] ++
         PesaGuard.NotificationService.Persistence.PostgresStore.children() ++
+        PesaGuard.NotificationService.OutboxRelay.children() ++
         [PesaGuard.NotificationService.Endpoint]
 
     Supervisor.start_link(children,

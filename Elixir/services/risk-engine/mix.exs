@@ -14,7 +14,7 @@ defmodule PesaGuard.RiskEngine.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :runtime_tools, :crypto],
+      extra_applications: [:logger, :runtime_tools, :crypto, :inets, :ssl],
       mod: {PesaGuard.RiskEngine.Application, []}
     ]
   end

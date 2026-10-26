@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS telixo_outbox (
   last_error TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  delivered_at TIMESTAMPTZ
+  delivered_at TIMESTAMPTZ,
+  lease_expires_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS telixo_outbox_ready_idx

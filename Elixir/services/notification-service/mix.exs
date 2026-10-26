@@ -14,7 +14,7 @@ defmodule PesaGuard.NotificationService.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :runtime_tools, :crypto],
+      extra_applications: [:logger, :runtime_tools, :crypto, :inets, :ssl],
       mod: {PesaGuard.NotificationService.Application, []}
     ]
   end

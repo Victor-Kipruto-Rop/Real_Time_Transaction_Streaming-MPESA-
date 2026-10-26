@@ -7,6 +7,7 @@ defmodule PesaGuard.RiskEngine.Application do
     children =
       [{PesaGuard.RiskEngine.Telemetry, []}] ++
         PesaGuard.RiskEngine.Persistence.PostgresStore.children() ++
+        PesaGuard.RiskEngine.OutboxRelay.children() ++
         [PesaGuard.RiskEngine.Endpoint]
 
     Supervisor.start_link(children,
