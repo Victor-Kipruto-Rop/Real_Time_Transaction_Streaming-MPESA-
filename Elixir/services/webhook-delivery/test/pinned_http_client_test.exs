@@ -25,8 +25,7 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClientTest do
 
     assert {:error, :invalid_request} = PinnedHttpClient.post(target, [:invalid], "{}")
   end
-end
-
+  
   test "parses valid HTTP status lines from the pinned TLS response" do
     assert {:ok, 200} = PinnedHttpClient.parse_status_line("HTTP/1.1 200 OK")
     assert {:ok, 204} = PinnedHttpClient.parse_status_line("HTTP/1.0 204")
@@ -39,3 +38,5 @@ end
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line("HTTP/1.1 2000 OK")
     assert {:error, :invalid_http_response} = PinnedHttpClient.parse_status_line(nil)
   end
+
+end
