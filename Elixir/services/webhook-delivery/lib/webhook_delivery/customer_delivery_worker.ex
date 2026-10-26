@@ -19,10 +19,25 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   end
 
   def children do
-    if System.get_env("DATABASE_URL") do
-      [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
-    else
-      []
+    environment = Application.get_env(:webhook_delivery, :environment)
+    database_url = System.get_env("DATABASE_URL")
+    key = System.get_env("WEBHOOK_SECRET_ENCRYPTION_KEY")
+
+    key_valid? =
+      case Base.decode64(key || "") do
+        {:ok, decoded} -> byte_size(decoded) == 32
+        _ -> false
+      end
+
+    cond do
+      is_binary(database_url) and database_url != "" and key_valid? ->
+        [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
+
+      environment == :prod ->
+        raise "DATABASE_URL and a base64-encoded 32-byte WEBHOOK_SECRET_ENCRYPTION_KEY are required in production"
+
+      true ->
+        []
     end
   end
 
@@ -45,12 +60,13 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
   defp deliver(delivery) do
     timestamp = System.system_time(:second)
-    body = Jason.encode!(%{
-      "id" => delivery.event_id,
-      "type" => delivery.event_type,
-      "delivery_id" => delivery.delivery_id,
-      "data" => delivery.payload
-    })
+    body =
+      Jason.encode!(%{
+        "id" => delivery.event_id,
+        "type" => delivery.event_type,
+        "delivery_id" => delivery.delivery_id,
+        "data" => delivery.payload
+      })
 
     result =
       with :ok <- TargetPolicy.validate(delivery.target_url),
@@ -64,8 +80,12 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
 
         try do
           :httpc.request(:post, request,
-            [timeout: @timeout_ms, connect_timeout: 2_000, autoredirect: false,
-             ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]],
+            [
+              timeout: @timeout_ms,
+              connect_timeout: 2_000,
+              autoredirect: false,
+              ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
+            ],
             body_format: :binary
           )
         rescue
@@ -79,14 +99,25 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       {:ok, {{_version, status, _reason}, _headers, _response}} when status >= 200 and status < 300 ->
         CustomerWebhookStore.acknowledge(delivery.tenant_id, delivery.delivery_id, status)
 
-      {:ok, {{_version, status, _reason}, _headers, _response}} when status in [408, 425, 429] or status >= 500 ->
+      {:ok, {{_version, status, _reason}, _headers, _response}}
+      when status in [408, 425, 429] or status >= 500 ->
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}")
 
       {:ok, {{_version, status, _reason}, _headers, _response}} ->
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, "http_status_#{status}", true)
 
-      {:error, reason} ->
-        CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason))
+      {:error, reason}
+      when reason in [
+             :target_url_must_use_https,
+             :target_url_host_required,
+             :target_url_credentials_forbidden,
+             :target_url_port_forbidden,
+             :target_url_private_host_forbidden,
+             :target_url_ip_literal_forbidden,
+             :target_url_dns_resolution_failed,
+             :invalid_secret
+           ] ->
+        CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason), true)
 
       {:error, reason} ->
         CustomerWebhookStore.fail(delivery.tenant_id, delivery.delivery_id, inspect(reason))
