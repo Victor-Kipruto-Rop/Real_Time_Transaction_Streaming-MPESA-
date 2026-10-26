@@ -26,9 +26,7 @@ defmodule PesaGuard.IntegrationHealthService.MixProject do
       {:jason, "~> 1.4"},
       {:telemetry_metrics, "~> 1.1"},
       {:telemetry_poller, "~> 1.2"},
-      {:plug, "~> 1.16"},
-      {:bandit, "~> 1.5", optional: true},
-      {:ex_unit, "~> 1.0", only: :test}
+      {:plug, "~> 1.16"}
     ]
   end
 
