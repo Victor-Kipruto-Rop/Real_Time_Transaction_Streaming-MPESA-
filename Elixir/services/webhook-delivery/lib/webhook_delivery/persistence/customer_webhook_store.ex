@@ -29,31 +29,32 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
       sql = """
       INSERT INTO telixo_webhook_subscriptions
         (subscription_id, tenant_id, idempotency_key, target_url, event_types,
-         secret_ciphertext, secret_nonce, secret_tag)
-      VALUES ($1, $2, $3, $4, $5::text::jsonb, $6, $7, $8)
+         secret_ciphertext, secret_nonce, secret_tag, secret_fingerprint)
+      VALUES ($1, $2, $3, $4, $5::text::jsonb, $6, $7, $8, $9)
       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
       RETURNING subscription_id, tenant_id, target_url, event_types::text, active, created_at
       """
 
       case Postgrex.query(@connection, sql, [
              subscription_id, tenant_id, idempotency_key, target_url,
-             Jason.encode!(Enum.uniq(event_types)), ciphertext, nonce, tag
+             Jason.encode!(Enum.uniq(event_types)), ciphertext, nonce, tag, :crypto.hash(:sha256, secret)
            ]) do
         {:ok, %{rows: [row]}} ->
           {:ok, decode_subscription(row), :created}
 
         {:ok, %{rows: []}} ->
           existing_sql = """
-          SELECT subscription_id, tenant_id, target_url, event_types::text, active, created_at
+          SELECT subscription_id, tenant_id, target_url, event_types::text, active, created_at, secret_fingerprint
           FROM telixo_webhook_subscriptions
           WHERE tenant_id = $1 AND idempotency_key = $2
           """
 
           case Postgrex.query(@connection, existing_sql, [tenant_id, idempotency_key]) do
             {:ok, %{rows: [row]}} ->
-              existing = decode_subscription(row)
+              existing = decode_subscription(Enum.take(row, 6))
+              fingerprint_matches? = Plug.Crypto.secure_compare(Enum.at(row, 6), :crypto.hash(:sha256, secret))
 
-              if existing.target_url == target_url and existing.event_types == Enum.uniq(event_types) do
+              if existing.target_url == target_url and existing.event_types == Enum.uniq(event_types) and fingerprint_matches? do
                 {:ok, existing, :duplicate}
               else
                 {:error, :idempotency_conflict}
