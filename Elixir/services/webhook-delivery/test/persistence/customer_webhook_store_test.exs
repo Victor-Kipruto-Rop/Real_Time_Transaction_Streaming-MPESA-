@@ -4,8 +4,6 @@ if System.get_env("DATABASE_URL") do
 
     alias PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore
 
-    @secret String.duplicate("test-secret-", 3)
-
     setup do
       original = System.get_env("WEBHOOK_SECRET_ENCRYPTION_KEY")
       key = :crypto.strong_rand_bytes(32) |> Base.encode64()
