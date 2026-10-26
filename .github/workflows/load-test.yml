@@ -1,5 +1,8 @@
 name: Load Testing
 
+env:
+  PYTHONPATH: Python
+
 on:
   workflow_dispatch:
     inputs:
