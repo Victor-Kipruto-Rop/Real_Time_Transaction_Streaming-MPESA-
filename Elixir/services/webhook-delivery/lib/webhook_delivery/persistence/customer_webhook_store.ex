@@ -200,23 +200,6 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
 
   def enqueue_for_event(_, _, _, _), do: {:error, :invalid_event}
 
-  def list_deliveries(tenant_id, subscription_id)
-      when is_binary(tenant_id) and is_binary(subscription_id) do
-    sql = """
-    SELECT delivery_id, status, attempts, payload::text, created_at
-    FROM telixo_customer_webhook_deliveries
-    WHERE tenant_id = $1 AND subscription_id = $2
-    ORDER BY created_at DESC
-    LIMIT 200
-    """
-
-    case Postgrex.query(@connection, sql, [tenant_id, subscription_id]) do
-      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &decode_delivery/1)}
-      {:error, _} -> {:error, :unavailable}
-    end
-  rescue
-    _ -> {:error, :unavailable}
-  end
 
   def claim(limit \\ 20) when is_integer(limit) and limit > 0 and limit <= 100 do
     sql = """
