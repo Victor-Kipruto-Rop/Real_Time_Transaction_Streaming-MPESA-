@@ -1,5 +1,9 @@
 # Stream Processing Service
 
+**Priority:** High
+
+**Design responsibility:** Process transaction events and analytical signals through Kafka or the selected event platform, with checkpointing, backpressure and replay.
+
 **Purpose:** Continuous event-time transformations and windowed aggregates over durable internal topics.
 
 ## Contract
