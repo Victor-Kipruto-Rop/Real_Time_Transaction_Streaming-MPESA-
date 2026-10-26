@@ -1,17 +1,21 @@
 # TELIXO Python Platform
 
-Python owns data-plane computation and analytical processing only. Java owns the API/control plane and canonical transaction-domain APIs; Go owns event relay, quota enforcement and infrastructure monitoring; Elixir owns outbound webhook delivery and notification execution.
+Python owns transaction-data processing, reconciliation computation, quality validation, risk inference and analytical/ML data workflows. It must not duplicate Java's API/control plane or canonical transaction domain, Go's event relay/quota/infrastructure monitoring, or Elixir's outbound webhook and notification execution.
 
-## Canonical Python services
+## The 10 planned services
 
-| Service | Responsibility | Must not own |
-|---|---|---|
-| `transaction-ingestion` | Consume durably accepted provider events and approved imports; validate, normalize, deduplicate and publish versioned internal events | Public callback edge owned by Java where configured; tenant identity; canonical ledger; payment execution |
-| `reconciliation-engine` | Match normalized provider transactions against the authorized ledger interface; classify discrepancies | A competing canonical ledger; payment movement, reversal or settlement |
-| `data-quality` | Validate records, maintain quality findings, quarantine invalid data and expose quality metrics | Reconciliation decisions or provider authentication |
-| `risk-scoring` | Produce explainable risk/anomaly signals from approved features and versioned rules/models | Final financial decisions, payment execution or duplicate risk engines |
+1. **transaction-ingestion** — consume durably accepted events/imports, normalize and deduplicate.
+2. **reconciliation-engine** — match normalized provider records to the authorized Java-owned ledger interface and classify discrepancies.
+3. **data-quality** — validate schemas and business rules; maintain findings and durable quarantine.
+4. **risk-scoring** — produce explainable risk signals using versioned features, rules and models.
+5. **stream-processing** — run continuous transformations, event-time windows and checkpointed stream jobs.
+6. **batch-processing** — run approved imports, historical backfills and resumable batch jobs.
+7. **analytics-metrics** — build tenant-scoped operational/business aggregates and curated datasets.
+8. **feature-engineering** — produce validated, versioned, point-in-time-correct features.
+9. **data-enrichment** — enrich records from explicitly approved reference sources with provenance.
+10. **model-evaluation-monitoring** — evaluate models and monitor drift, calibration and outcome quality.
 
-Streaming, batch, analytics, feature engineering and model evaluation are **capabilities/libraries or jobs**, not additional always-on microservices by default. Split them only when independent scaling, ownership, SLOs or failure isolation justify it.
+These are ten explicit service boundaries and design specifications; they are not all implemented yet. Stream, batch, analytics and model-evaluation workloads may initially run as jobs/workers rather than continuously running services. Their ownership stays explicit; independent deployment should be justified by throughput, SLOs, fault isolation and operational cost.
 
 ## Target layout
 
@@ -21,46 +25,41 @@ Python/
     transaction-ingestion/
     reconciliation-engine/
     data-quality/
-    risk-scoring/                 # existing service; migrate behind shared conventions
+    risk-scoring/
+    stream-processing/
+    batch-processing/
+    analytics-metrics/
+    feature-engineering/
+    data-enrichment/
+    model-evaluation-monitoring/
   shared/
-    contracts/                    # Python adapters to root versioned contracts
-    observability/                 # structured logging, metrics and tracing helpers
-  jobs/
-    batch/
-    analytics/
-    model-evaluation/
+    contracts/       # adapters to root contracts; no divergent schema copies
+    observability/
+    config/
+  jobs/               # scheduled entry points, not competing service domains
   tests/
+    unit/
     contract/
     integration/
+    fault/
     e2e/
   docs/
+    SERVICE_CATALOG.md
     ARCHITECTURE.md
     MIGRATION.md
 ```
 
-The repository currently contains legacy modules under `app/`, `ingestion/`, `streaming/`, `ml/`, `data_quality/`, `analytics/` and `dags/`. These are compatibility sources during migration, not extra service ownership. Do not delete them until imports, Docker/Compose/Kubernetes/CI paths, scheduled jobs and tests have been migrated and verified.
+## Non-negotiable boundaries
 
-## Integration and safety rules
-
-- Python consumes provider events only after the configured edge has durably accepted them.
-- Use versioned schemas and stable event IDs; idempotency must survive process restarts.
-- Obtain tenant context from authenticated service metadata or a verified internal envelope, never an untrusted provider field alone.
-- Use an outbox or equivalent recoverable publication; a publish attempt is not proof of delivery.
-- Invalid events must be durably quarantined/DLQ'd with reason and correlation ID; never silently drop poison messages.
-- Consumers must tolerate at-least-once delivery and support controlled replay.
-- Reconciliation outcomes must be explainable and auditable.
+- Consume provider events only after durable acceptance at the configured Java edge.
+- Canonical tenant, merchant and transaction-domain state remains Java-owned.
+- Go owns event relay, quota enforcement and infrastructure monitoring; Elixir owns outbound webhook delivery and notification execution.
 - TELIXO does not initiate, confirm, refund, reverse, settle or move funds.
-- Keep secrets in deployment secret managers; never commit credentials or production payloads.
-- Every deployable service needs liveness/readiness, structured logs, metrics, tracing, graceful shutdown and bounded retries.
+- Use versioned contracts, stable event IDs, trusted tenant context, durable idempotency, outbox/inbox, DLQ/quarantine, replay and correlation IDs.
+- Never fabricate enrichment or model results; represent unavailable/stale states explicitly.
+- Keep secrets out of source control and minimize sensitive data in logs and event payloads.
+- Do not delete legacy modules until imports, jobs, CI and deployment manifests are migrated and tests pass.
 
-## Migration gates
+## Design gate before implementation
 
-1. Inventory imports, entry points, topics, tables and deployment references.
-2. Add service contracts and isolated tests.
-3. Move one capability at a time and update entry points and deployment manifests together.
-4. Run unit, contract, integration and container smoke tests.
-5. Compare outputs against legacy behavior using non-production data.
-6. Verify staging recovery/replay and rollback.
-7. Remove old modules only after repository-wide references and deployment configuration prove them unused.
-
-See [service architecture](docs/ARCHITECTURE.md) and [migration plan](docs/MIGRATION.md). This refactor does not change production resources.
+Review [service catalog](docs/SERVICE_CATALOG.md), [architecture](docs/ARCHITECTURE.md) and [migration plan](docs/MIGRATION.md). Each service needs approved API/event contracts, data ownership, threat model, SLO/runbook, failure/recovery plan and automated tests before implementation is considered ready.
