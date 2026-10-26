@@ -131,5 +131,18 @@ defmodule PesaGuard.WebhookDelivery.CustomerWebhooksController do
     end
   end
 
+  def history(conn, %{"subscription_id" => subscription_id}) do
+    tenant_id = conn.assigns.tenant_context.tenant_id
+
+    case CustomerWebhookStore.list_deliveries(tenant_id, subscription_id) do
+      {:ok, deliveries} -> json(conn, %{data: deliveries})
+      {:error, _} -> conn |> put_status(:service_unavailable) |> json(%{error: "delivery_history_unavailable"})
+    end
+  end
+
+  def history(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "subscription_id_required"})
+  end
+
   defp valid_key?(key), do: is_binary(key) and byte_size(key) in 1..200
 end
