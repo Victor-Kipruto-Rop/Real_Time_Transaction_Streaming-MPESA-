@@ -9,7 +9,7 @@ defmodule PesaGuard.AuditEventService.RecordsController do
     tenant_id = conn.assigns.tenant_context.tenant_id
     supplied_tenant = Map.get(params, "tenant_id")
     idempotency_key = conn |> Plug.Conn.get_req_header("idempotency-key") |> List.first()
-    kind = Map.get(params, "record_type", "default")
+    kind = Map.get(params, "record_type", "audit_event")
 
     cond do
       is_binary(supplied_tenant) and supplied_tenant != tenant_id ->
@@ -73,5 +73,5 @@ defmodule PesaGuard.AuditEventService.RecordsController do
   end
 
   defp valid_key?(key), do: is_binary(key) and byte_size(key) in 1..200
-  defp valid_kind?(kind), do: is_binary(kind) and byte_size(kind) in 1..80
+  defp valid_kind?(kind), do: kind == "audit_event"
 end
