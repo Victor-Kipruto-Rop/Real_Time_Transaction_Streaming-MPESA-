@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["API Explorer","Inspect versioned endpoints and preview requests in the sandbox."],["API credentials","Manage sandbox credentials. Production access requires approval."],["Webhooks","Configure signed event delivery and inspect delivery history."],["SDKs & guides","Find integration patterns, examples and API references."]];
 const nav = ["Overview","API Explorer","API keys","Webhooks","Events","SDKs","Usage"];
 document.querySelector("#app").innerHTML = `

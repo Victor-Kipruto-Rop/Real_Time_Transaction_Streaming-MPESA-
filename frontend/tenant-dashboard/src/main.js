@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["Reconciliation health","Monitor matched, unmatched and pending records."],["Exceptions queue","Review discrepancies with traceable evidence."],["Integrations","Manage provider configuration and connection status."],["Risk alerts","Investigate signals without moving or reversing funds."]];
 const nav = ["Overview","Reconciliation","Transactions","Risk alerts","Integrations","Reports","Team"];
 document.querySelector("#app").innerHTML = `

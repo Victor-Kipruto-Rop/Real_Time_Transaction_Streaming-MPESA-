@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["Public API","Status must be connected to real health checks."],["Tenant workspace","Status must be populated from monitoring."],["Developer platform","Status must be populated from monitoring."],["Webhook delivery","Delivery health must reflect measured queue and provider metrics."]];
 const nav = ["Current status","Incidents","Maintenance","History"];
 document.querySelector("#app").innerHTML = `

@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["Tenant operations","Review tenant lifecycle and operational state."],["Verification queue","Track KYB cases and outstanding evidence."],["Service health","Inspect dependency status and recent incidents."],["Audit trail","Review privileged actions with actor and timestamp."]];
 const nav = ["Overview","Tenants","Verification","Services","Incidents","Audit log","Access"];
 document.querySelector("#app").innerHTML = `

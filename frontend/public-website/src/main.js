@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["Reconciliation","Compare supported transaction events with your internal records."],["Risk signals","Surface unusual patterns for human review."],["Operational clarity","Give finance teams a traceable view of exceptions."],["Developer access","Connect systems through documented APIs and webhooks."]];
 const nav = ["Platform","Capabilities","Integrations","Security","Documentation"];
 document.querySelector("#app").innerHTML = `

@@ -1,3 +1,5 @@
+import "./style.css";
+
 const sections = [["Quickstart","Make your first sandbox request using test credentials."],["Authentication","Learn credential scopes, rotation and environment separation."],["Webhook security","Validate signatures, deduplicate events and retry safely."],["Reconciliation events","Consume versioned events without creating a duplicate ledger."]];
 const nav = ["Getting started","API reference","Authentication","Webhooks","Events","SDKs","Guides"];
 document.querySelector("#app").innerHTML = `
