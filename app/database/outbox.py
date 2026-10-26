@@ -178,8 +178,18 @@ def relay_once(producer: Any) -> bool:
         logger.info("Outbox event published", extra={"event_key": row["event_key"], "topic": row["topic"]})
     except Exception as exc:
         OUTBOX_PUBLISH_TOTAL.labels(outcome="failure").inc()
-        _mark_retry(row["id"], str(exc), row["attempts"])
-        logger.exception("Outbox delivery failed; event retained for retry", extra={"event_key": row["event_key"]})
+        # Persist a sanitized diagnostic, not arbitrary broker exception text.
+        # Broker errors can contain request metadata or other sensitive values.
+        _mark_retry(
+            row["id"],
+            "{}: publish failed".format(type(exc).__name__),
+            row["attempts"],
+        )
+        logger.error(
+            "Outbox delivery failed (%s); event retained for retry",
+            type(exc).__name__,
+            extra={"event_key": row["event_key"]},
+        )
     return True
 
 
