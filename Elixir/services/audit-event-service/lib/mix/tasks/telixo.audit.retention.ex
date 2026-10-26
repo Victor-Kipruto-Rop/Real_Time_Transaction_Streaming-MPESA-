@@ -89,6 +89,16 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
   end
 
   defp expired_prefix(connection, tenant_id, cutoff) do
+    {first_sequence, previous_hash} =
+      case Postgrex.query!(
+             connection,
+             "SELECT first_retained_sequence, previous_hash FROM telixo_audit_chain_anchors WHERE tenant_id = $1",
+             [tenant_id]
+           ).rows do
+        [[sequence, hash]] -> {sequence, hash}
+        [] -> {1, nil}
+      end
+
     rows =
       Postgrex.query!(
         connection,
@@ -96,15 +106,19 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
         SELECT event_id, tenant_id, tenant_sequence, idempotency_key, actor_type, action,
                occurred_at, event_payload::text, previous_hash, event_hash, recorded_at
         FROM telixo_audit_events
-        WHERE tenant_id = $1
+        WHERE tenant_id = $1 AND tenant_sequence >= $2
         ORDER BY tenant_sequence ASC
         """,
-        [tenant_id]
+        [tenant_id, first_sequence]
       ).rows
 
-    Enum.take_while(rows, fn row ->
-      DateTime.compare(Enum.at(row, 10), cutoff) == :lt
-    end)
+    case verify_chain_rows(rows, tenant_id, first_sequence, previous_hash) do
+      :ok ->
+        Enum.take_while(rows, fn row -> DateTime.compare(Enum.at(row, 10), cutoff) == :lt end)
+
+      {:error, event_id} ->
+        Mix.raise("Refusing retention purge: hash-chain integrity failed at event #{event_id} for tenant #{tenant_id}")
+    end
   end
 
   defp archive_and_purge!(connection, archive_directory, tenant_id, events, actor_id, reason, request_id) do
@@ -238,6 +252,54 @@ defmodule Mix.Tasks.Telixo.Audit.Retention do
         Mix.raise("Audit retention transaction failed for tenant #{tenant_id}: #{inspect(error)}")
     end
   end
+
+  defp verify_chain_rows([], _tenant_id, _expected_sequence, _previous_hash), do: :ok
+
+  defp verify_chain_rows(
+         [row | rest],
+         tenant_id,
+         expected_sequence,
+         expected_previous_hash
+       ) do
+    event_id = Enum.at(row, 0)
+    sequence = Enum.at(row, 2)
+    idempotency_key = Enum.at(row, 3)
+    payload = Jason.decode!(Enum.at(row, 7))
+    previous_hash = Enum.at(row, 8)
+    stored_hash = Enum.at(row, 9)
+    expected_hash = calculate_hash(tenant_id, idempotency_key, sequence, payload, expected_previous_hash)
+
+    if sequence == expected_sequence and previous_hash == expected_previous_hash and
+         is_binary(stored_hash) and Plug.Crypto.secure_compare(stored_hash, expected_hash) do
+      verify_chain_rows(rest, tenant_id, expected_sequence + 1, stored_hash)
+    else
+      {:error, event_id}
+    end
+  end
+
+  defp calculate_hash(tenant_id, idempotency_key, sequence, event, previous_hash) do
+    envelope = %{
+      "tenant_id" => tenant_id,
+      "idempotency_key" => idempotency_key,
+      "tenant_sequence" => sequence,
+      "event" => event,
+      "previous_hash" => previous_hash
+    }
+
+    :crypto.hash(:sha256, canonical_json(envelope)) |> Base.encode16(case: :lower)
+  end
+
+  defp canonical_json(map) when is_map(map) do
+    fields =
+      map
+      |> Enum.sort_by(fn {key, _value} -> key end)
+      |> Enum.map(fn {key, value} -> Jason.encode!(key) <> ":" <> canonical_json(value) end)
+
+    "{" <> Enum.join(fields, ",") <> "}"
+  end
+
+  defp canonical_json(list), do: "[" <> (list |> Enum.map(&canonical_json/1) |> Enum.join(",")) <> "]"
+  defp canonical_json(value), do: Jason.encode!(value)
 
   defp encode_event(row) do
     event = %{
