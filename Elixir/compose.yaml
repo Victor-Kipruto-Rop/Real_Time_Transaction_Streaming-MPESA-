@@ -1,16 +1,39 @@
-name: pesaguard-elixir
+name: telixo-elixir
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: telixo
+      POSTGRES_USER: telixo
+      POSTGRES_PASSWORD: "${ELIXIR_POSTGRES_PASSWORD:?set ELIXIR_POSTGRES_PASSWORD}"
+    volumes:
+      - elixir-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telixo -d telixo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
   webhook-delivery:
     build:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
         SERVICE: webhook-delivery
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8200:8080"
     restart: unless-stopped
@@ -20,11 +43,20 @@ services:
       dockerfile: Elixir/Dockerfile
       args:
         SERVICE: notification-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8201:8080"
     restart: unless-stopped
@@ -34,11 +66,20 @@ services:
       dockerfile: Elixir/Dockerfile
       args:
         SERVICE: risk-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8202:8080"
     restart: unless-stopped
@@ -48,11 +89,20 @@ services:
       dockerfile: Elixir/Dockerfile
       args:
         SERVICE: fraud-detection
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8203:8080"
     restart: unless-stopped
@@ -61,12 +111,21 @@ services:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
-        SERVICE: audit-event
+        SERVICE: audit-event-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8204:8080"
     restart: unless-stopped
@@ -76,11 +135,20 @@ services:
       dockerfile: Elixir/Dockerfile
       args:
         SERVICE: workflow-orchestrator
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8205:8080"
     restart: unless-stopped
@@ -89,12 +157,21 @@ services:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
-        SERVICE: integration-health
+        SERVICE: integration-health-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8206:8080"
     restart: unless-stopped
@@ -103,12 +180,21 @@ services:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
-        SERVICE: data-export
+        SERVICE: data-export-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8207:8080"
     restart: unless-stopped
@@ -117,12 +203,21 @@ services:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
-        SERVICE: compliance-workflow
+        SERVICE: compliance-workflow-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8208:8080"
     restart: unless-stopped
@@ -131,13 +226,23 @@ services:
       context: ..
       dockerfile: Elixir/Dockerfile
       args:
-        SERVICE: incident-management
+        SERVICE: incident-management-service
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
-      SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
+      PHX_HOST: "${PHX_HOST:-localhost}"
+      SECRET_KEY_BASE: "${SECRET_KEY_BASE:?set SECRET_KEY_BASE}"
+      DATABASE_URL: "postgres://telixo:${ELIXIR_POSTGRES_PASSWORD}@postgres:5432/telixo"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET (at least 32 bytes)}"
+      JWT_ISSUER: "${JWT_ISSUER:-telixo}"
+      EVENT_RELAY_URL: "${EVENT_RELAY_URL:?set EVENT_RELAY_URL}"
+      EVENT_RELAY_TOKEN: "${EVENT_RELAY_TOKEN:?set EVENT_RELAY_TOKEN (at least 32 bytes)}"
     ports:
       - "127.0.0.1:8209:8080"
     restart: unless-stopped
-
+volumes:
+  elixir-postgres-data:
