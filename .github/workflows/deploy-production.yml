@@ -77,14 +77,14 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit -q --maxfail=1
+          pytest Python/tests/unit -q --maxfail=1
 
       - name: Run smoke tests
         env:
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           REQUIRE_WEBHOOK_SIGNATURE: "true"
         run: |
-          pytest tests/e2e/smoke_tests.py -q --maxfail=1
+          pytest Python/tests/e2e/smoke_tests.py -q --maxfail=1
 
   security-scan:
     name: Security scan
@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquaPython/security/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -273,7 +273,7 @@ jobs:
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           REQUIRE_WEBHOOK_SIGNATURE: "true"
         run: |
-          pytest tests/e2e/smoke_tests.py -q --maxfail=1
+          pytest Python/tests/e2e/smoke_tests.py -q --maxfail=1
 
       - name: Verify deployment health
         run: |
