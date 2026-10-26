@@ -11,4 +11,9 @@ defmodule PesaGuard.WebhookDelivery.Domain.ProcessorTest do
     command = %{"target_url" => "https://192.168.1.10/hook", "payload" => %{}}
     assert {:error, :target_url_ip_literal_forbidden} = Processor.prepare(command)
   end
+
+  test "accepts HTTPS webhook targets with object payloads" do
+    command = %{"target_url" => "https://hooks.example.com/events", "payload" => %{"ok" => true}}
+    assert {:ok, ^command} = Processor.prepare(command)
+  end
 end
