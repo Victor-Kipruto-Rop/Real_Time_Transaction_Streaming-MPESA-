@@ -41,7 +41,7 @@ jobs:
     
     - name: Run Locust load test
       run: |
-        cd tests/load
+        cd Python/tests/load
         locust -f locustfile.py \
           --headless \
           --users ${{ github.event.inputs.users }} \
@@ -56,12 +56,12 @@ jobs:
       with:
         name: load-test-results
         path: |
-          tests/load/load-test-report.html
-          tests/load/load-test-results*.csv
+          Python/tests/load/load-test-report.html
+          Python/tests/load/load-test-results*.csv
     
     - name: Check performance thresholds
       run: |
-        python tests/load/check_thresholds.py
+        python Python/tests/load/check_thresholds.py
     
     - name: Stop infrastructure
       if: always()
@@ -87,7 +87,7 @@ jobs:
     
     - name: Run benchmarks
       run: |
-        pytest tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json
+        pytest Python/tests/benchmarks/ --benchmark-only --benchmark-json=benchmark-results.json
     
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
@@ -97,4 +97,4 @@ jobs:
     
     - name: Compare with baseline
       run: |
-        python tests/benchmarks/compare_baseline.py benchmark-results.json
+        python Python/tests/benchmarks/compare_baseline.py benchmark-results.json
