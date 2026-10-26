@@ -8,7 +8,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   alias PesaGuard.WebhookDelivery.{CustomerDeliveryStore, DeliveryRequest, SecretBox}
 
   @poll_ms 1_000
-  @batch_size 20
+  @batch_size 5
 
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -16,10 +16,18 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
     enabled? = System.get_env("WEBHOOK_DELIVERY_WORKER_ENABLED") == "true"
     database? = is_binary(System.get_env("DATABASE_URL")) and System.get_env("DATABASE_URL") != ""
 
-    if enabled? and database? do
-      [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
-    else
-      []
+    cond do
+      enabled? and not database? ->
+        raise "DATABASE_URL is required when WEBHOOK_DELIVERY_WORKER_ENABLED=true"
+
+      enabled? and not SecretBox.key_configured?() ->
+        raise "WEBHOOK_ENCRYPTION_KEY must be a base64-encoded 32-byte key when the customer webhook worker is enabled"
+
+      enabled? ->
+        [Supervisor.child_spec({__MODULE__, []}, id: __MODULE__)]
+
+      true ->
+        []
     end
   end
 
