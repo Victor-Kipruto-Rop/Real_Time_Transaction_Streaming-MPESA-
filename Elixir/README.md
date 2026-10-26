@@ -54,3 +54,20 @@ Each service exposes liveness at `GET /health`, database-backed readiness at `GE
 Record creation and state changes write an event to PostgreSQL's transactional outbox in the same transaction. The outbox relay delivers events at least once to the configured `EVENT_RELAY_URL` using `EVENT_RELAY_TOKEN`; the receiver must durably accept events and deduplicate by the `Idempotency-Key` header. Delivery attempts are leased, retried with bounded backoff, and dead-lettered after repeated or permanent failures.
 
 The Compose stack now includes a PostgreSQL container. Before starting it, provide `ELIXIR_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `JWT_SECRET`, `EVENT_RELAY_URL`, and `EVENT_RELAY_TOKEN` in the environment. Never use development placeholders for production secrets. The shared record API and outbox are a common foundation; service-specific business handlers and external-provider adapters still require service-level integration tests.
+
+
+## Service-specific validation modules
+
+Each service exposes a Domain.Processor used by its authenticated record API:
+- Webhook Delivery rejects non-HTTPS destinations, URL credentials, non-standard ports and literal IP hosts. Network egress controls are still required to prevent DNS-based SSRF.
+- Notification Service validates supported channels and recipient references.
+- Workflow Orchestrator validates workflow identifiers and positive integer versions.
+- Audit Event Service validates actor types, action length and ISO-8601 timestamps.
+- Compliance Workflow validates evidence reference lists and duplicate evidence references.
+- Fraud Detection produces a bounded, explainable rule score from versioned features; it does not initiate or reverse payments.
+- Risk Engine aggregates normalized signals into a low/medium/high assessment and explanation list; it does not perform payment actions.
+- Integration Health validates check types and bounded timeouts.
+- Incident Management validates severity, summary length and timestamps.
+- Data Export validates formats, scopes and row limits.
+
+These modules implement deterministic validation and initial scoring contracts. They do not replace provider-specific delivery adapters, actual health probes, export execution, workflow timers, external audit retention, or a model-serving deployment. Those require integration tests and service-specific operational configuration before production use.
