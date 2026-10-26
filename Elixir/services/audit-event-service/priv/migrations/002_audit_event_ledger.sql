@@ -25,30 +25,14 @@ CREATE TABLE IF NOT EXISTS telixo_audit_tenant_heads (
 CREATE INDEX IF NOT EXISTS telixo_audit_events_tenant_time_idx
   ON telixo_audit_events (tenant_id, tenant_sequence DESC);
 
-CREATE OR REPLACE FUNCTION telixo_reject_audit_event_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  RAISE EXCEPTION 'audit events are append-only';
-END;
-$$;
+DROP RULE IF EXISTS telixo_audit_events_no_update ON telixo_audit_events;
+CREATE RULE telixo_audit_events_no_update AS
+  ON UPDATE TO telixo_audit_events DO INSTEAD NOTHING;
 
-DROP TRIGGER IF EXISTS telixo_audit_events_no_update ON telixo_audit_events;
-CREATE TRIGGER telixo_audit_events_no_update
-  BEFORE UPDATE OR DELETE ON telixo_audit_events
-  FOR EACH ROW EXECUTE FUNCTION telixo_reject_audit_event_mutation();
+DROP RULE IF EXISTS telixo_audit_events_no_delete ON telixo_audit_events;
+CREATE RULE telixo_audit_events_no_delete AS
+  ON DELETE TO telixo_audit_events DO INSTEAD NOTHING;
 
-CREATE OR REPLACE FUNCTION telixo_reject_audit_head_delete()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  RAISE EXCEPTION 'audit tenant heads cannot be deleted';
-END;
-$$;
-
-DROP TRIGGER IF EXISTS telixo_audit_tenant_heads_no_delete ON telixo_audit_tenant_heads;
-CREATE TRIGGER telixo_audit_tenant_heads_no_delete
-  BEFORE DELETE ON telixo_audit_tenant_heads
-  FOR EACH ROW EXECUTE FUNCTION telixo_reject_audit_head_delete();
+DROP RULE IF EXISTS telixo_audit_tenant_heads_no_delete ON telixo_audit_tenant_heads;
+CREATE RULE telixo_audit_tenant_heads_no_delete AS
+  ON DELETE TO telixo_audit_tenant_heads DO INSTEAD NOTHING;
