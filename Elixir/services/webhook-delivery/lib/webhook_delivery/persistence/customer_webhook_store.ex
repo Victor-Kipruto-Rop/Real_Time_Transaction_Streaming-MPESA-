@@ -170,6 +170,37 @@ defmodule PesaGuard.WebhookDelivery.Persistence.CustomerWebhookStore do
     _ -> {:error, :unavailable}
   end
 
+  def list_attempts(tenant_id, subscription_id, delivery_id, limit \\ 100)
+      when is_binary(tenant_id) and is_binary(subscription_id) and is_binary(delivery_id) and
+             is_integer(limit) and limit > 0 and limit <= 200 do
+    sql = """
+    SELECT attempt_number, outcome, http_status, error_code, attempted_at
+    FROM telixo_customer_webhook_attempts
+    WHERE tenant_id = $1 AND subscription_id = $2 AND delivery_id = $3
+    ORDER BY attempt_number DESC
+    LIMIT $4
+    """
+
+    case Postgrex.query(@connection, sql, [tenant_id, subscription_id, delivery_id, limit]) do
+      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &decode_attempt/1)}
+      {:error, _} -> {:error, :unavailable}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  def list_attempts(_, _, _, _), do: {:error, :invalid_attempt_query}
+
+  defp decode_attempt([attempt_number, outcome, http_status, error_code, attempted_at]) do
+    %{
+      attempt_number: attempt_number,
+      outcome: outcome,
+      http_status: http_status,
+      error_code: error_code,
+      attempted_at: DateTime.to_iso8601(attempted_at)
+    }
+  end
+
   def enqueue_for_event(tenant_id, event_id, event_type, payload)
       when is_binary(tenant_id) and is_binary(event_id) and is_binary(event_type) and is_map(payload) do
     sql = """
