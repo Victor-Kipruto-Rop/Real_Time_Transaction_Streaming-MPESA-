@@ -107,6 +107,10 @@ if System.get_env("DATABASE_URL") do
                  """,
                  [tenant, failed_delivery.delivery_id]
                )
+      assert {:ok, [%{attempt_number: 1, outcome: "permanent_failure"}]} =
+               CustomerWebhookStore.list_attempts(tenant, subscription.subscription_id, failed_delivery.delivery_id)
+      assert {:ok, []} =
+               CustomerWebhookStore.list_attempts(tenant <> "-other", subscription.subscription_id, failed_delivery.delivery_id)
 
       retry_event_id = "retry-" <> Base.encode16(:crypto.strong_rand_bytes(8))
       assert {:ok, retry_delivery, :created} =
@@ -131,6 +135,8 @@ if System.get_env("DATABASE_URL") do
                  """,
                  [tenant, retry_delivery.delivery_id]
                )
+      assert {:ok, [%{attempt_number: 1, outcome: "retry_scheduled"}]} =
+               CustomerWebhookStore.list_attempts(tenant, subscription.subscription_id, retry_delivery.delivery_id)
     end
 
     test "rejects weak secrets and event types outside the subscription allowlist" do
