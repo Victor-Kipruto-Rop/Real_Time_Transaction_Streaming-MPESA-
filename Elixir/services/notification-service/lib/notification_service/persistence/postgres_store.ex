@@ -14,7 +14,7 @@ defmodule PesaGuard.NotificationService.Persistence.PostgresStore do
   end
 
   def children do
-    environment = Application.get_env(:webhook_delivery, :environment)
+    environment = Application.get_env(:notification_service, :environment)
 
     case {System.get_env("DATABASE_URL"), environment} do
       {url, _} when is_binary(url) and url != "" ->
