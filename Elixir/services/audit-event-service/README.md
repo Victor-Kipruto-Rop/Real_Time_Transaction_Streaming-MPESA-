@@ -25,3 +25,12 @@ The current endpoints are scaffold health checks, not proof of domain implementa
 Audit-event writes use a dedicated PostgreSQL ledger instead of the mutable generic record state machine. Each tenant has a serialized sequence and SHA-256 hash chain; appends, tenant-head updates, and audit-event-service.audit_event_appended outbox insertion commit in one transaction. Idempotency keys return the original event for identical retries and conflict if reused for a different event. The database migration blocks row updates/deletes through append-only rules, and AuditLedger.verify_chain/1 checks sequence, previous-hash linkage and event hashes.
 
 The hash chain provides tamper-evidence within the database trust boundary; it is not a substitute for external/WORM backups, privileged-role separation, retention controls, or independent periodic verification. The generic state-transition endpoint is disabled for audit events. CI and PostgreSQL integration tests must pass before promotion.
+
+
+## Privileged retention controls and independent verification
+
+Migration `002_audit_controls.sql` adds tenant-scoped retention-policy metadata, an append-only privileged-access log, and append-only integrity-verification run records. The `/v1/admin/retention-policy` endpoints and online integrity-verification endpoint require a verified JWT containing an explicit `audit_admin`, `audit_compliance`, or `platform_security_admin` role plus an `x-audit-reason` header. Every privileged read/write is recorded with actor, tenant, reason, and request ID.
+
+Retention policy values and legal holds are persisted, but they do not silently delete ledger rows. The ledger's append-only database protections remain in force; a production purge must be paired with approved immutable archival, legal-hold checks, and a separately privileged retention executor before physical deletion is enabled.
+
+For independent hash-chain verification, schedule `mix telixo.audit.verify` from this service directory. It requires `AUDIT_VERIFY_DATABASE_URL` for a dedicated read-only database role and `DATABASE_URL` for writing verification results. The task rejects identical database usernames, independently recomputes canonical event hashes, records a verification result per tenant, and exits unsuccessfully on any chain mismatch. Schedule it externally (for example, with a controlled cron job) and alert on non-zero exit status or failed verification rows.
