@@ -1,0 +1,48 @@
+name: Elixir services CI
+on:
+  pull_request:
+    paths:
+      - "Elixir/**"
+      - ".github/workflows/elixir-services-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Elixir/**"
+      - ".github/workflows/elixir-services-ci.yml"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - webhook-delivery
+          - notification-service
+          - risk-engine
+          - fraud-detection
+          - audit-event-service
+          - workflow-orchestrator
+          - integration-health-service
+          - data-export-service
+          - compliance-workflow-service
+          - incident-management-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          elixir-version: "1.17"
+      - name: Fetch dependencies
+        working-directory: Elixir/services/${{ matrix.service }}
+        run: mix deps.get
+      - name: Compile with warnings as errors
+        working-directory: Elixir/services/${{ matrix.service }}
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Format check
+        working-directory: Elixir/services/${{ matrix.service }}
+        run: mix format --check-formatted
+      - name: Run tests
+        working-directory: Elixir/services/${{ matrix.service }}
+        run: mix test

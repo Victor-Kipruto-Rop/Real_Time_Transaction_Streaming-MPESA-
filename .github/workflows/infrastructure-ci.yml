@@ -1,0 +1,31 @@
+name: Infrastructure Catalog CI
+on:
+  pull_request:
+    paths:
+      - "Infrastructure/**"
+      - ".github/workflows/infrastructure-ci.yml"
+      - "frontend/**"
+      - "Java/**"
+      - "Elixir/**"
+      - "src/pesaguard_streaming/**"
+  push:
+    branches: [main]
+    paths:
+      - "Infrastructure/**"
+      - ".github/workflows/infrastructure-ci.yml"
+      - "frontend/**"
+      - "Java/**"
+      - "Elixir/**"
+      - "src/pesaguard_streaming/**"
+permissions:
+  contents: read
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pyyaml
+      - run: python Infrastructure/scripts/validate-catalog.py
