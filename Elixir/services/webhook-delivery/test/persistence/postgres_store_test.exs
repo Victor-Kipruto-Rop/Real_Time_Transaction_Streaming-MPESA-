@@ -106,9 +106,17 @@ if System.get_env("DATABASE_URL") do
                )
 
       assert {:ok, claimed} = PostgresStore.claim_outbox(100)
-      event = Enum.find(claimed, &(&1.event_id == record.record_id and &1.tenant_id == tenant_id))
+      event =
+        Enum.find(claimed, &(&1.event_id == record.record_id and &1.tenant_id == tenant_id))
       assert event
-      assert :ok = PostgresStore.fail_outbox(tenant_id, record.record_id, System.system_time(:second), "permanent test failure", true)
+      assert :ok =
+               PostgresStore.fail_outbox(
+                 tenant_id,
+                 record.record_id,
+                 System.system_time(:second),
+                 "permanent test failure",
+                 true
+               )
 
       assert :ok =
                PostgresStore.replay_dead_letter(
@@ -140,7 +148,8 @@ if System.get_env("DATABASE_URL") do
       assert reason == "Approved recovery after correcting the downstream dependency"
 
       assert {:ok, replayed_events} = PostgresStore.claim_outbox(100)
-      replayed = Enum.find(replayed_events, &(&1.event_id == record.record_id and &1.tenant_id == tenant_id))
+      replayed =
+        Enum.find(replayed_events, &(&1.event_id == record.record_id and &1.tenant_id == tenant_id))
       assert replayed
       assert replayed.attempts == 1
       assert :ok = PostgresStore.acknowledge_outbox(tenant_id, record.record_id)
