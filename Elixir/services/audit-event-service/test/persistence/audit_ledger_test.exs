@@ -54,13 +54,15 @@ if System.get_env("DATABASE_URL") do
 
       assert {:ok, record, :created} = AuditLedger.append(tenant, "immutable-key", event)
 
-      assert {:error, %Postgrex.Error{}} =
+      assert {:ok, %{num_rows: 0}} =
                Postgrex.query(
                  PesaGuard.AuditEventService.Persistence.PostgresConnection,
                  "UPDATE telixo_audit_events SET action = 'tampered' WHERE tenant_id = $1 AND event_id = $2",
                  [tenant, record.event_id]
                )
 
+      assert {:ok, unchanged} = AuditLedger.get(tenant, record.event_id)
+      assert unchanged.action == "security.policy_checked"
       assert :ok = AuditLedger.verify_chain(tenant)
     end
   end
