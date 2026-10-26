@@ -37,6 +37,19 @@ defmodule PesaGuard.WebhookDelivery.SigningTest do
              Signing.verify(@secret, "not-a-time", "v1=deadbeef", @body, 1)
   end
 
+  test "canonicalizes numeric timestamp strings" do
+    assert {:ok, from_integer} = Signing.sign(@secret, 42, @body)
+    assert {:ok, from_string} = Signing.sign(@secret, "0042", @body)
+    assert from_integer == from_string
+    assert :ok = Signing.verify(@secret, "0042", from_integer, @body, 42)
+  end
+
+  test "rejects a tampered signature and weak verification secrets" do
+    assert {:ok, signature} = Signing.sign(@secret, 42, @body)
+    assert {:error, :invalid_signature} = Signing.verify(@secret, "42", signature <> "00", @body, 42)
+    assert {:error, :invalid_secret} = Signing.verify("short", "42", signature, @body, 42)
+  end
+
   test "produces stable delivery metadata headers" do
     assert {:ok, headers} = Signing.headers("delivery-123", @secret, @body, 1_800_000_000)
     assert {"x-telixo-delivery-id", "delivery-123"} in headers
