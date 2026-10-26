@@ -1,4 +1,8 @@
-# Model Evaluation and Monitoring Service
+# Model Evaluation Monitoring Service
+
+**Priority:** High
+
+**Design responsibility:** Evaluate model quality, detect drift, track false positives/negatives and support controlled model-version changes.
 
 **Purpose:** Evaluate model versions and monitor drift, calibration, missing features and outcome quality without controlling live transaction processing.
 
