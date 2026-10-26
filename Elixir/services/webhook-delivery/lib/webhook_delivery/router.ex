@@ -22,6 +22,7 @@ defmodule PesaGuard.WebhookDelivery.Router do
     get "/records/:id", RecordsController, :show
     patch "/records/:id/state", RecordsController, :transition
 
+    post "/outbox/:event_id/replay", OutboxReplayController, :replay
     post "/events", CustomerWebhooksController, :fanout
     get "/subscriptions", CustomerWebhooksController, :index
     post "/subscriptions", CustomerWebhooksController, :create
