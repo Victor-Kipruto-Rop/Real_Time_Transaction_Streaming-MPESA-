@@ -14,11 +14,7 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
       when is_map(target) and is_list(headers) and is_binary(body) do
     with true <- valid_headers?(headers),
          {:ok, tcp_socket} <- connect_tcp(target.address, target.port) do
-      try do
-        request_over_tls(tcp_socket, target, headers, body)
-      after
-        :gen_tcp.close(tcp_socket)
-      end
+      request_over_tls(tcp_socket, target, headers, body)
     else
       false -> {:error, :invalid_request}
       {:error, reason} -> {:error, reason}
@@ -66,7 +62,26 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
         end
 
       {:error, _reason} ->
+        safe_tcp_close(tcp_socket)
         {:error, :tls_connection_failed}
+    end
+  rescue
+    _ ->
+      safe_tcp_close(tcp_socket)
+      {:error, :request_failed}
+  catch
+    :exit, _ ->
+      safe_tcp_close(tcp_socket)
+      {:error, :request_failed}
+  end
+
+  defp safe_tcp_close(socket) do
+    try do
+      :gen_tcp.close(socket)
+    rescue
+      _ -> :ok
+    catch
+      :exit, _ -> :ok
     end
   end
 
