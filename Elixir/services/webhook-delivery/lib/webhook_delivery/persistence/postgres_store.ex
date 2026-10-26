@@ -292,6 +292,55 @@ defmodule PesaGuard.WebhookDelivery.Persistence.PostgresStore do
     _ -> {:error, :unavailable}
   end
 
+  @doc """
+  Requeues a dead-lettered event for an authorized operator and writes an audit
+  record in the same database transaction. Event identity and payload are
+  preserved so downstream idempotency remains effective.
+  """
+  def replay_dead_letter(tenant_id, event_id, actor_subject, reason)
+      when is_binary(tenant_id) and is_binary(event_id) and is_binary(actor_subject) and
+             is_binary(reason) do
+    replay_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
+
+    case Postgrex.transaction(@connection, fn conn ->
+           case Postgrex.query!(
+                  conn,
+                  """
+                  UPDATE telixo_outbox
+                  SET status = 'pending', attempts = 0, next_attempt_at = now(),
+                      last_error = NULL, lease_expires_at = NULL, delivered_at = NULL,
+                      updated_at = now()
+                  WHERE service_name = $1 AND tenant_id = $2 AND event_id = $3
+                    AND status = 'dead_lettered'
+                  RETURNING event_id
+                  """,
+                  [@service, tenant_id, event_id]
+                ).rows do
+             [[^event_id]] ->
+               Postgrex.query!(
+                 conn,
+                 """
+                 INSERT INTO telixo_outbox_replay_audit
+                   (replay_id, service_name, tenant_id, event_id, actor_subject, reason)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 """,
+                 [replay_id, @service, tenant_id, event_id, actor_subject, reason]
+               )
+
+               :ok
+
+             [] ->
+               {:error, :not_found_or_not_dead_lettered}
+           end
+         end) do
+      {:ok, :ok} -> :ok
+      {:ok, {:error, :not_found_or_not_dead_lettered}} -> {:error, :not_found_or_not_dead_lettered}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
   defp decode_outbox([event_id, tenant_id, event_type, payload, attempts]) do
     %{
       event_id: event_id,
