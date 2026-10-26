@@ -47,7 +47,11 @@ defmodule PesaGuard.WebhookDelivery.TargetPolicy do
       a == 172 and b in 16..31 -> false
       a == 192 and b == 168 -> false
       a == 100 and b in 64..127 -> false
-      a == 192 and b == 0 and c == 0 -> false\n      a == 192 and b == 0 and c == 2 -> false\n      a == 192 and b == 88 and c == 99 -> false\n      a == 198 and b == 51 and c == 100 -> false\n      a == 203 and b == 0 and c == 113 -> false
+      a == 192 and b == 0 and c == 0 -> false
+      a == 192 and b == 0 and c == 2 -> false
+      a == 192 and b == 88 and c == 99 -> false
+      a == 198 and b == 51 and c == 100 -> false
+      a == 203 and b == 0 and c == 113 -> false
       a == 198 and b in 18..19 -> false
       a >= 224 -> false
       {a, b, c, d} == {255, 255, 255, 255} -> false
