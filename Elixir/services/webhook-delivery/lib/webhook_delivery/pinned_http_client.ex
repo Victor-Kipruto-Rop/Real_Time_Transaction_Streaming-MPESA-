@@ -105,31 +105,43 @@ defmodule PesaGuard.WebhookDelivery.PinnedHttpClient do
     |> IO.iodata_to_binary()
   end
 
-  defp read_status_line(socket, buffer, timeout) when byte_size(buffer) <= @max_status_line_bytes do
-    case :binary.match(buffer, "\r\n") do
+  defp read_status_line(socket, buffer, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    read_status_line_until(socket, buffer, deadline)
+  end
+
+  defp read_status_line_until(socket, buffer, deadline)
+       when byte_size(buffer) <= @max_status_line_bytes do
+    case :binary.match(buffer, "\\r\\n") do
       {index, 2} ->
         status_line = binary_part(buffer, 0, index)
 
-        case Regex.run(~r/^HTTP\/\d(?:\.\d)?\s+(\d{3})(?:\s|$)/, status_line) do
+        case Regex.run(~r/^HTTP\\/\\d(?:\\.\\d)?\\s+(\\d{3})(?:\\s|$)/, status_line) do
           [_, status] -> {:ok, String.to_integer(status)}
           _ -> {:error, :invalid_http_response}
         end
 
       :nomatch ->
-        case :ssl.recv(socket, 0, timeout) do
-          {:ok, chunk} when byte_size(chunk) > 0 ->
-            read_status_line(socket, buffer <> chunk, timeout)
+        remaining = deadline - System.monotonic_time(:millisecond)
 
-          {:error, :closed} ->
-            {:error, :empty_http_response}
+        if remaining <= 0 do
+          {:error, :response_timeout}
+        else
+          case :ssl.recv(socket, 0, remaining) do
+            {:ok, chunk} when byte_size(chunk) > 0 ->
+              read_status_line_until(socket, buffer <> chunk, deadline)
 
-          {:error, _} ->
-            {:error, :response_read_failed}
+            {:error, :closed} ->
+              {:error, :empty_http_response}
+
+            {:error, _} ->
+              {:error, :response_read_failed}
+          end
         end
     end
   end
 
-  defp read_status_line(_socket, _buffer, _timeout), do: {:error, :http_status_line_too_large}
+  defp read_status_line_until(_socket, _buffer, _deadline), do: {:error, :http_status_line_too_large}
 
   defp valid_headers?(headers) do
     Enum.all?(headers, fn
