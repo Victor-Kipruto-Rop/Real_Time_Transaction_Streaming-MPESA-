@@ -41,3 +41,10 @@ The current endpoints are scaffold health checks, not proof of domain implementa
 - Each completed delivery attempt is recorded transactionally with its attempt number, outcome, HTTP status (when present), and sanitized error code. Retry scheduling uses capped exponential backoff with jitter; exhausted or permanent failures are dead-lettered. Attempt history is retained separately from the delivery's current status so operators can audit retry behavior.
 - The authenticated `POST /v1/events` endpoint is the integration seam for the trusted internal event relay. Source services must call it only with authenticated tenant-scoped event contracts; source-event fan-out is not a substitute for the separate transactional outbox relay.
 - DNS preflight cannot eliminate DNS-rebinding races. Production network egress policy must block loopback, private, link-local, and metadata-service destinations. The delivery pipeline still requires CI and fault-injection verification before production use.
+
+
+## Endpoint circuit breaker
+
+The customer delivery worker now uses a bounded, process-local circuit breaker keyed by endpoint origin (scheme, host and port). Repeated transient transport failures and retryable HTTP statuses open the circuit; while open, the worker defers deliveries through the existing durable retry queue rather than continuing to call the failing destination. Successful responses reset the breaker, and permanent application-level 4xx responses do not count as endpoint outages.
+
+Circuit state is intentionally ephemeral and bounded; PostgreSQL remains authoritative for delivery status and retry recovery. A worker restart resets the optimization but does not lose queued delivery state. The breaker is not a replacement for DNS/IP validation, network egress restrictions, per-provider rate limits, or end-to-end delivery tests.
