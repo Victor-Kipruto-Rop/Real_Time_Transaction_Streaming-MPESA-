@@ -237,8 +237,8 @@ defmodule PesaGuard.WebhookDelivery.Persistence.PostgresStore do
       FROM telixo_outbox
       WHERE service_name = $1 AND status = 'pending' AND next_attempt_at <= now()
       ORDER BY created_at
-      FOR UPDATE SKIP LOCKED
       LIMIT $2
+      FOR UPDATE SKIP LOCKED
     )
     UPDATE telixo_outbox AS outbox
     SET status = 'in_progress', attempts = outbox.attempts + 1, updated_at = now()

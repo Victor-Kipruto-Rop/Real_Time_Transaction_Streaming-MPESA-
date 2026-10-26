@@ -46,7 +46,7 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
   end
 
   def children do
-    environment = Application.get_env(:fraud_detection, :environment)
+    environment = Application.get_env(:webhook_delivery, :environment)
 
     case {System.get_env("DATABASE_URL"), environment} do
       {url, _} when is_binary(url) and url != "" ->
@@ -237,8 +237,8 @@ defmodule PesaGuard.FraudDetection.Persistence.PostgresStore do
       FROM telixo_outbox
       WHERE service_name = $1 AND status = 'pending' AND next_attempt_at <= now()
       ORDER BY created_at
-      FOR UPDATE SKIP LOCKED
       LIMIT $2
+      FOR UPDATE SKIP LOCKED
     )
     UPDATE telixo_outbox AS outbox
     SET status = 'in_progress', attempts = outbox.attempts + 1, updated_at = now()
