@@ -38,7 +38,8 @@ defmodule PesaGuard.WebhookDelivery.Security.JWTAuth do
 
   @spec verify_token(binary(), binary(), binary()) :: {:ok, map()} | {:error, atom()}
   def verify_token(token, secret, issuer)
-      when is_binary(token) and is_binary(secret) and is_binary(issuer) do
+      when is_binary(token) and byte_size(token) <= 8_192 and is_binary(secret) and
+             byte_size(secret) >= 32 and is_binary(issuer) do
     with [encoded_header, encoded_claims, encoded_signature] <- String.split(token, "."),
          {:ok, header_json} <- Base.url_decode64(encoded_header, padding: false),
          {:ok, header} when is_map(header) <- Jason.decode(header_json),

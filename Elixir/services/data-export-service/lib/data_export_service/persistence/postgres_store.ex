@@ -47,7 +47,7 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
   end
 
   def children do
-    environment = Application.get_env(:data_export_service, :environment)
+    environment = Application.get_env(:webhook_delivery, :environment)
 
     case {System.get_env("DATABASE_URL"), environment} do
       {url, _} when is_binary(url) and url != "" ->
@@ -114,8 +114,6 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
       when is_binary(tenant_id) and is_binary(kind) and is_binary(idempotency_key) and
              is_binary(state) and is_map(payload) do
     record_id = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
-    encoded_payload = Jason.encode!(payload)
-
     record_sql = """
     INSERT INTO telixo_service_records
       (record_id, service_name, tenant_id, kind, state, idempotency_key, payload)
@@ -133,7 +131,7 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
                   kind,
                   state,
                   idempotency_key,
-                  encoded_payload
+                  payload
                 ]).rows do
              [row] ->
                record = decode_row(row)
@@ -154,7 +152,7 @@ defmodule PesaGuard.DataExportService.Persistence.PostgresStore do
                Postgrex.query!(
                  conn,
                  "INSERT INTO telixo_outbox (event_id, service_name, tenant_id, event_type, payload) VALUES ($1, $2, $3, $4, $5::jsonb)",
-                 [record_id, @service, tenant_id, event["event_type"], Jason.encode!(event)]
+                 [record_id, @service, tenant_id, event["event_type"], event]
                )
 
                {:ok, record, :created}
