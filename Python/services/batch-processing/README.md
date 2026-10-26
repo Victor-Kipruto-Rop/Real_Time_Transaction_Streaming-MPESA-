@@ -1,5 +1,9 @@
 # Batch Processing Service
 
+**Priority:** High
+
+**Design responsibility:** Run scheduled imports, historical reconciliation, backfills and large-volume processing as resumable, auditable jobs.
+
 **Purpose:** Scheduled imports, historical backfills, reconciliation reruns and bounded repair jobs with resumable checkpoints.
 
 ## Contract
