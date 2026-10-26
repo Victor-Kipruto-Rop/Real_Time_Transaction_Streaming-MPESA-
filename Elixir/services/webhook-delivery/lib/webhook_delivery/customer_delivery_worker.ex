@@ -11,7 +11,7 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
   alias PesaGuard.WebhookDelivery.TargetPolicy
 
   @poll_interval_ms 1_000
-  @batch_size 20
+  @batch_size 5
   @timeout_ms 5_000
 
   def start_link(opts \\ []) do
@@ -72,7 +72,9 @@ defmodule PesaGuard.WebhookDelivery.CustomerDeliveryWorker do
       with :ok <- TargetPolicy.validate(delivery.target_url),
            {:ok, headers} <- Signing.headers(delivery.delivery_id, delivery.secret, body, timestamp) do
         request_headers =
-          Enum.map(headers, fn {name, value} ->
+          headers
+          |> Enum.reject(fn {name, _value} -> name == "content-type" end)
+          |> Enum.map(fn {name, value} ->
             {String.to_charlist(name), String.to_charlist(value)}
           end)
 
