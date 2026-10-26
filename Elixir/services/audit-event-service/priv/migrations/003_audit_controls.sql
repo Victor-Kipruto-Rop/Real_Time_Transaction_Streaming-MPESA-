@@ -106,3 +106,7 @@ CREATE RULE telixo_audit_events_no_delete AS
   WHERE session_user <> 'telixo_audit_retention_executor'
      OR current_setting('telixo.audit_retention_purge', true) IS DISTINCT FROM 'authorized'
   DO INSTEAD NOTHING;
+
+DROP RULE IF EXISTS telixo_audit_chain_anchors_no_delete ON telixo_audit_chain_anchors;
+CREATE RULE telixo_audit_chain_anchors_no_delete AS
+  ON DELETE TO telixo_audit_chain_anchors DO INSTEAD NOTHING;
