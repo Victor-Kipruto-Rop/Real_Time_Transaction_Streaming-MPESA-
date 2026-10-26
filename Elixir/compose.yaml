@@ -7,7 +7,7 @@ services:
       args:
         SERVICE: webhook-delivery
     environment:
-      MIX_ENV: dev
+      MIX_ENV: prod
       PORT: "8080"
       PHX_SERVER: "true"
       SECRET_KEY_BASE: "${ELIXIR_DEV_SECRET:-local-only-development-secret-change-before-use-000000000000000000000000000000000000000000000000}"
