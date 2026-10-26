@@ -1,5 +1,8 @@
 name: Deploy to Production
 
+env:
+  PYTHONPATH: Python
+
 on:
   push:
     tags:
