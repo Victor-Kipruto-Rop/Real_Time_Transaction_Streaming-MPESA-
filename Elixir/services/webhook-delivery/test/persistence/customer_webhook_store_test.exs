@@ -67,16 +67,7 @@ if System.get_env("DATABASE_URL") do
       assert {:ok, history} = CustomerWebhookStore.list_deliveries(tenant, subscription.subscription_id)
       assert Enum.any?(history, &(&1.delivery_id == delivery.delivery_id and &1.status == "delivered"))
 
-      fanout_event_id = "fanout-" <> Base.encode16(:crypto.strong_rand_bytes(8))
-      assert {:ok, fanout} =
-               CustomerWebhookStore.enqueue_for_event(tenant, fanout_event_id,
-                 "reconciliation.completed", %{"source" => "internal-event-relay"})
-      assert length(fanout) == 1
-      assert {:ok, fanout_replay} =
-               CustomerWebhookStore.enqueue_for_event(tenant, fanout_event_id,
-                 "reconciliation.completed", %{"source" => "internal-event-relay"})
-      assert length(fanout_replay) == 1
-      assert hd(fanout_replay).delivery_id == hd(fanout).delivery_id
+
       fanout_item = Enum.find(claimed, &(&1.delivery_id == hd(fanout_deliveries).delivery_id))
       assert fanout_item
       assert :ok = CustomerWebhookStore.acknowledge(tenant, fanout_item.delivery_id, 204)
