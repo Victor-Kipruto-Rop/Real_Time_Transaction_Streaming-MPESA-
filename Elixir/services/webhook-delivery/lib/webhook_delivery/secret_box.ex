@@ -9,6 +9,8 @@ defmodule PesaGuard.WebhookDelivery.SecretBox do
   @nonce_bytes 12
   @tag_bytes 16
 
+  def key_configured?, do: match?({:ok, _}, encryption_key())
+
   def encrypt(secret) when is_binary(secret) and byte_size(secret) >= 32 do
     with {:ok, key} <- encryption_key() do
       nonce = :crypto.strong_rand_bytes(@nonce_bytes)
