@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telixo-risk-scoring"
+version = "0.1.0"
+description = "Explainable, stateless transaction risk-scoring service"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.141.1",
+  "uvicorn[standard]==0.34.0",
+  "pydantic==2.12.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

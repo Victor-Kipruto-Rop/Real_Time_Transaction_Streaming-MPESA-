@@ -1,19 +1,17 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements/base.txt requirements/data.txt requirements/cloud.txt requirements/ml.txt ./
+COPY Python/requirements/base.txt Python/requirements/data.txt Python/requirements/cloud.txt Python/requirements/ml.txt ./
 RUN pip install --no-cache-dir --default-timeout=1000 -r base.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r data.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r cloud.txt && \
     pip install --no-cache-dir --default-timeout=1000 -r ml.txt
 
-COPY ingestion ./ingestion
-COPY schemas ./schemas
+COPY Python/ingestion ./ingestion
+COPY Python/schemas ./schemas
 
 EXPOSE 5000
-
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "ingestion.webhook_receiver:app"]

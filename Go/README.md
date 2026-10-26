@@ -8,6 +8,11 @@ Go services here are infrastructure components, not a second transaction ledger.
 - `services/quota-engine`: Redis-backed atomic fixed-window quota check for authenticated internal gateway calls. Tenant/environment/key/route values must be derived by the trusted gateway after authentication, never accepted directly from browsers.
 - `services/infrastructure-monitor`: configurable HTTP dependency checks and a protected read-only health snapshot. Configure targets explicitly; never expose internal target details publicly without an API-side filter.
 
+
+## Service engineering prompts
+
+Before implementing or refactoring a Go service, follow the strict service-specific prompt and shared rules in [Go/PROMPTS.md](PROMPTS.md). Each service directory also contains its own `PROMPT.md` with service-specific invariants, security requirements, failure handling, test matrix and definition of done.
+
 ## Docker
 
 Build and start the three Go infrastructure containers locally (ports 8300–8302):

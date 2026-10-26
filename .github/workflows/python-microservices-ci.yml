@@ -1,0 +1,41 @@
+name: Python microservices CI
+
+on:
+  pull_request:
+    paths:
+      - "Python/**"
+      - ".github/workflows/python-microservices-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Python/**"
+      - ".github/workflows/python-microservices-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  risk-scoring:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Python/services/risk-scoring
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Python/services/risk-scoring/requirements.txt
+      - name: Install service and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+          pip install -e .
+      - name: Run service tests
+        run: pytest -q tests
+      - name: Compile service
+        run: python -m compileall -q src tests
+      - name: Build service image
+        run: docker build -t telixo-risk-scoring:ci .
